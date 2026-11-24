@@ -344,13 +344,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [inRoom, canControl, syncState, currentPlaybackTime, roomId]);
 
-  const handleJoinOrCreate = (name: string, targetRoomId?: string) => {
+  const handleJoinOrCreate = (name: string, targetRoomId?: string, initialVideoId?: string) => {
     const socket = getSocket();
     setUsername(name);
     socket.emit('join_room', {
       roomId: targetRoomId,
       username: name,
       userId: currentUserId,
+      initialVideoId,
     });
   };
 

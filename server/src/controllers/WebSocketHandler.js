@@ -18,10 +18,12 @@ export class WebSocketHandler {
    */
   handleConnection(socket) {
     // 1. Join Room
-    socket.on('join_room', async ({ roomId, username, userId }) => {
+    socket.on('join_room', async ({ roomId, username, userId, initialVideoId, videoId }) => {
       try {
         const cleanUsername = String(username || '').trim() || 'Anonymous';
         const cleanUserId = userId ? String(userId).trim() : crypto.randomUUID();
+        const rawVideoId = initialVideoId || videoId;
+        const cleanInitialVideoId = rawVideoId ? (extractYouTubeVideoId(rawVideoId) || String(rawVideoId).trim()) : undefined;
 
         let room;
         let isCreator = false;
@@ -34,8 +36,18 @@ export class WebSocketHandler {
             username: cleanUsername,
             role: 'host',
           });
-          room = roomManager.createRoom(participant);
+          room = roomManager.createRoom(participant, cleanInitialVideoId);
           isCreator = true;
+
+          // Fetch title in background and update room videoTitle
+          if (room.videoId) {
+            fetchYouTubeTitle(room.videoId).then((resolvedTitle) => {
+              if (room.videoId && resolvedTitle && room.videoTitle !== resolvedTitle) {
+                room.videoTitle = resolvedTitle;
+                this.io.to(room.roomId).emit('sync_state', room.getSyncState());
+              }
+            });
+          }
         } else {
           // Joining an existing room
           const cleanRoomId = String(roomId).trim().toUpperCase();

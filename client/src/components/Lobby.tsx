@@ -12,7 +12,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   });
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [partyName, setPartyName] = useState('My Watch Party');
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('jfKfPfyJRdk');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('QdBZY2fkU-0');
   const [isPublic, setIsPublic] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverOnline, setServerOnline] = useState(true);
@@ -65,9 +65,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
   // Quick Preset Chips for Evaluators / Quick Start
   const presetChips = [
-    { label: '🎵 Lofi Beats 24/7', videoId: 'jfKfPfyJRdk' },
     { label: '🎮 GTA VI Trailer', videoId: 'QdBZY2fkU-0' },
-    { label: '🌿 4K Nature Relax', videoId: 'M7lc1UVf-VE' },
+    { label: '🎵 Lofi Beats 24/7', videoId: 'jfKfPfyJRdk' },
+    { label: '🌿 4K Nature Relax', videoId: 'LXb3EKWsInQ' },
   ];
 
   // Sample curated parties for the "Browse Active Parties" shelf
@@ -153,32 +153,13 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Card 1: Create Watch Party */}
           <div className="bg-[#18181B] border border-[#2F2F35] rounded-xl p-5 sm:p-6 flex flex-col justify-between shadow-2xl hover:border-[#9146FF]/40 transition-all duration-150">
-            <div className="space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#BF94FF]" />
-                <span>Create Watch Party</span>
-              </h2>
+            <form onSubmit={handleCreate} className="space-y-4 flex flex-col justify-between h-full">
+              <div className="space-y-3">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#BF94FF]" />
+                  <span>Create Watch Party</span>
+                </h2>
 
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={isSubmitting}
-                className="w-full py-2.5 px-4 bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] disabled:opacity-50 text-white rounded font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Start Watch Party</span>
-                  </>
-                )}
-              </button>
-
-              <div className="space-y-3 pt-1">
                 <div>
                   <label className="text-[11px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1">
                     Your Display Name
@@ -265,7 +246,25 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                   </label>
                 </div>
               </div>
-            </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-4 bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] disabled:opacity-50 text-white rounded font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-4"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Start Watch Party</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
           {/* Card 2: Join Room Code */}

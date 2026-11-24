@@ -18,10 +18,21 @@ export async function fetchYouTubeTitle(videoId) {
       if (data && data.title) {
         return data.title;
       }
+      if (data && data.html) {
+        const match = data.html.match(/title="([^"]+)"/);
+        if (match && match[1]) return match[1];
+      }
     }
   } catch (err) {
     // Fallback if network blocked or video metadata unlisted
   }
+
+  // Curated fallbacks for quick demo presets
+  if (videoId === 'QdBZY2fkU-0') return 'Grand Theft Auto VI Trailer 1';
+  if (videoId === 'jfKfPfyJRdk') return 'lofi hip hop radio 📚 beats to relax/study to';
+  if (videoId === 'LXb3EKWsInQ') return 'COSTA RICA IN 4K 60fps HDR (ULTRA HD)';
+  if (videoId === 'M7lc1UVf-VE') return 'YouTube Developers Live: Embedded Web Player Customization';
+
   return `Video (${videoId})`;
 }
 
@@ -32,15 +43,22 @@ export class Room {
   /**
    * @param {Object} params
    * @param {string} params.roomId
-   * @param {string} [params.initialVideoId='M7lc1UVf-VE']
+   * @param {string} [params.initialVideoId='QdBZY2fkU-0']
    */
-  constructor({ roomId, initialVideoId = 'M7lc1UVf-VE' }) {
+  constructor({ roomId, initialVideoId = 'QdBZY2fkU-0' }) {
     if (!roomId) {
       throw new Error('Room requires a roomId');
     }
     this.roomId = String(roomId).toUpperCase();
     this.videoId = initialVideoId;
-    this.videoTitle = `Video (${initialVideoId})`;
+    this.videoTitle =
+      initialVideoId === 'QdBZY2fkU-0'
+        ? 'Grand Theft Auto VI Trailer 1'
+        : initialVideoId === 'jfKfPfyJRdk'
+        ? 'lofi hip hop radio 📚 beats to relax/study to'
+        : initialVideoId === 'LXb3EKWsInQ'
+        ? 'COSTA RICA IN 4K 60fps HDR (ULTRA HD)'
+        : `Video (${initialVideoId})`;
     this.playState = 'paused'; // 'playing' | 'paused'
     this.currentTime = 0; // seconds
     this.lastUpdatedAt = Date.now();
