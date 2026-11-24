@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Crown, Shield, User, ChevronLeft, ChevronRight, UserMinus, ArrowRightLeft, UserCheck, Copy, Check } from 'lucide-react';
+import { Users, Crown, Shield, User, ChevronLeft, ChevronRight, UserMinus, ArrowRightLeft, UserCheck, Copy, Check, MoreHorizontal } from 'lucide-react';
 import { Participant, Role } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
@@ -12,6 +12,7 @@ interface ParticipantsListProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
+  className?: string;
 }
 
 export const ParticipantsList: React.FC<ParticipantsListProps> = ({
@@ -22,8 +23,9 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
   isCollapsed,
   onToggleCollapse,
   onNotification,
+  className,
 }) => {
-  const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
+  const [activeMenuUserId, setActiveMenuUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const socket = getSocket();
   const isHost = currentUserRole === 'host';
@@ -42,7 +44,7 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
       userId: targetUserId,
       role: newRole,
     });
-    setSelectedUserForAction(null);
+    setActiveMenuUserId(null);
     onNotification?.(`Assigned role: ${newRole}`, 'info');
   };
 
@@ -52,7 +54,7 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
         roomId,
         userId: targetUserId,
       });
-      setSelectedUserForAction(null);
+      setActiveMenuUserId(null);
       onNotification?.(`Removed ${targetName}`, 'info');
     }
   };
@@ -63,7 +65,7 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
         roomId,
         userId: targetUserId,
       });
-      setSelectedUserForAction(null);
+      setActiveMenuUserId(null);
       onNotification?.(`Transferred Host to ${targetName}`, 'success');
     }
   };
@@ -71,11 +73,11 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
   const getRoleIcon = (role: Role) => {
     switch (role) {
       case 'host':
-        return <Crown className="w-3.5 h-3.5 text-[#FFD700] shrink-0" />;
+        return <Crown className="w-3.5 h-3.5 text-[#FFD700] fill-current shrink-0" />;
       case 'moderator':
         return (
           <span title="Moderator">
-            <svg className="w-3.5 h-3.5 text-[#00AD03] shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3.5 h-3.5 text-[#00AD03] fill-current shrink-0" viewBox="0 0 24 24">
               <path d="M14.5 2.5L12 5l2 2 4-4-3.5-0.5zm-5 5L3 14l3.5 3.5 6.5-6.5-3.5-3.5zM2 20l2 2 4.5-4.5-2-2L2 20zm14-11l-1.5-1.5 4.5-4.5 1.5 1.5-4.5 4.5z" />
             </svg>
           </span>
@@ -88,11 +90,11 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
   return (
     <aside
       className={`bg-[#18181B] border-r border-[#2F2F35] flex flex-col transition-all duration-200 select-none ${
-        isCollapsed ? 'w-[56px]' : 'w-[240px]'
+        className || (isCollapsed ? 'w-[56px]' : 'w-[240px]')
       } h-full shrink-0`}
     >
       {/* Header */}
-      <div className="h-10 px-3 border-b border-[#2F2F35] flex items-center justify-between text-xs">
+      <div className="h-10 px-3 border-b border-[#2F2F35] flex items-center justify-between text-xs shrink-0">
         {!isCollapsed && (
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-bold text-[11px] text-[#ADADB8] uppercase tracking-wider truncate">
@@ -127,24 +129,17 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
         {participants.map((p) => {
           const isMe = p.userId === currentUserId;
           const userColor = getTwitchUserColor(p.username);
-          const isSelected = selectedUserForAction === p.userId;
+          const isMenuOpen = activeMenuUserId === p.userId;
 
           return (
             <div
               key={p.userId}
-              className={`rounded-lg transition-colors p-1.5 ${
-                isSelected ? 'bg-[#26262C]' : 'hover:bg-[#1F1F23]'
+              className={`rounded-lg transition-colors p-1.5 relative group ${
+                isMenuOpen ? 'bg-[#26262C]' : 'hover:bg-[#1F1F23]'
               }`}
             >
               <div
-                onClick={() => {
-                  if (isHost && !isMe && !isCollapsed) {
-                    setSelectedUserForAction(isSelected ? null : p.userId);
-                  }
-                }}
-                className={`flex items-center gap-2 ${
-                  isHost && !isMe ? 'cursor-pointer' : ''
-                }`}
+                className="flex items-center gap-2"
                 title={isCollapsed ? `${p.username} (${p.role})` : undefined}
               >
                 {/* Avatar with initial + Online Dot */}
@@ -161,65 +156,69 @@ export const ParticipantsList: React.FC<ParticipantsListProps> = ({
                 {/* Details (when expanded) */}
                 {!isCollapsed && (
                   <div className="min-w-0 flex-1 flex items-center justify-between gap-1">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate flex items-center gap-1">
-                        <span>{p.username}</span>
-                        {isMe && <span className="text-[10px] text-[#ADADB8] font-normal">(you)</span>}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+                        <span className="truncate">{p.username}</span>
+                        {isMe && (
+                          <span className="px-1 py-0.2 rounded bg-[#9146FF]/30 text-[#BF94FF] text-[9px] font-bold shrink-0">
+                            YOU
+                          </span>
+                        )}
                       </p>
                       <p className="text-[10px] text-[#ADADB8] capitalize truncate">
                         {p.role}
                       </p>
                     </div>
 
-                    <div className="shrink-0">{getRoleIcon(p.role)}</div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {getRoleIcon(p.role)}
+
+                      {/* Clean ⋯ popover button for Host actions on OTHER members */}
+                      {isHost && !isMe && (
+                        <button
+                          onClick={() => setActiveMenuUserId(isMenuOpen ? null : p.userId)}
+                          className="p-1 hover:text-white text-[#ADADB8] rounded hover:bg-[#2F2F35] transition-colors"
+                          title="Host Actions"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Host Action Buttons on clicked member */}
-              {isHost && !isMe && !isCollapsed && isSelected && (
-                <div className="pt-2 mt-1 border-t border-[#2F2F35] flex items-center gap-1 text-[10px]">
+              {/* Host Actions Popover Menu */}
+              {isHost && !isMe && !isCollapsed && isMenuOpen && (
+                <div className="absolute right-2 top-10 z-40 bg-[#1F1F23] border border-[#2F2F35] rounded-lg shadow-2xl p-1 w-36 space-y-0.5 animate-in fade-in duration-150">
                   {p.role !== 'moderator' ? (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRoleChange(p.userId, 'moderator');
-                      }}
-                      className="flex-1 py-1 px-1.5 rounded bg-[#1F1F23] hover:bg-[#9146FF] text-[#EFEFF1] font-semibold text-center transition-colors"
+                      onClick={() => handleRoleChange(p.userId, 'moderator')}
+                      className="w-full text-left px-2 py-1.5 rounded text-[11px] font-medium text-[#EFEFF1] hover:bg-[#9146FF] hover:text-white transition-colors"
                     >
-                      Promote
+                      Promote to Mod
                     </button>
                   ) : (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRoleChange(p.userId, 'participant');
-                      }}
-                      className="flex-1 py-1 px-1.5 rounded bg-[#1F1F23] hover:bg-[#323238] text-[#ADADB8] font-semibold text-center transition-colors"
+                      onClick={() => handleRoleChange(p.userId, 'participant')}
+                      className="w-full text-left px-2 py-1.5 rounded text-[11px] font-medium text-[#ADADB8] hover:bg-[#26262C] hover:text-white transition-colors"
                     >
-                      Demote
+                      Demote to Viewer
                     </button>
                   )}
 
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTransferHost(p.userId, p.username);
-                    }}
-                    className="flex-1 py-1 px-1.5 rounded bg-[#1F1F23] hover:bg-[#E5A100]/20 text-[#FFD700] font-semibold text-center transition-colors"
+                    onClick={() => handleTransferHost(p.userId, p.username)}
+                    className="w-full text-left px-2 py-1.5 rounded text-[11px] font-medium text-[#FFD700] hover:bg-[#FFD700]/20 transition-colors"
                   >
                     Transfer Host
                   </button>
 
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleKick(p.userId, p.username);
-                    }}
-                    className="py-1 px-2 rounded bg-[#EB0400] hover:bg-[#C90300] text-white font-bold text-center transition-colors"
-                    title="Kick user"
+                    onClick={() => handleKick(p.userId, p.username)}
+                    className="w-full text-left px-2 py-1.5 rounded text-[11px] font-medium text-[#EB0400] hover:bg-[#EB0400]/20 transition-colors"
                   >
-                    Kick
+                    Kick from Party
                   </button>
                 </div>
               )}

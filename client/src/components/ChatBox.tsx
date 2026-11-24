@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Crown, Shield, Smile, Settings, Pin, Check, X, Users, ChevronRight, ChevronLeft, Clock, Film } from 'lucide-react';
+import { Send, Crown, Shield, Smile, Settings, Pin, Check, X, Users, ChevronRight, ChevronLeft, Clock, Film, ArrowDown } from 'lucide-react';
 import { ChatMessage, ControlRequest, Role, QueueItem, SuggestedItem } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
@@ -18,6 +18,7 @@ interface ChatBoxProps {
   onToggleCollapse?: () => void;
   onSeekToTime?: (time: number) => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
+  className?: string;
 }
 
 export const ChatBox: React.FC<ChatBoxProps> = ({
@@ -33,20 +34,66 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   onToggleCollapse,
   onSeekToTime,
   onNotification,
+  className,
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'queue'>('chat');
   const [inputText, setInputText] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [hasNewQueueItem, setHasNewQueueItem] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLenRef = useRef(messages.length);
+  const prevSuggestedLenRef = useRef(suggestedQueue.length);
   const socket = getSocket();
 
   const canApprove = currentUserRole === 'host' || currentUserRole === 'moderator';
 
+  // Track unread messages when in Queue tab
   useEffect(() => {
-    if (activeTab === 'chat') {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > prevMessagesLenRef.current) {
+      if (activeTab === 'queue') {
+        setUnreadChatCount((prev) => prev + (messages.length - prevMessagesLenRef.current));
+      } else if (!isScrolledUp) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-  }, [messages, activeTab]);
+    prevMessagesLenRef.current = messages.length;
+  }, [messages, activeTab, isScrolledUp]);
+
+  // Track new suggestions when in Chat tab
+  useEffect(() => {
+    if (suggestedQueue.length > prevSuggestedLenRef.current) {
+      if (activeTab === 'chat') {
+        setHasNewQueueItem(true);
+      }
+    }
+    prevSuggestedLenRef.current = suggestedQueue.length;
+  }, [suggestedQueue, activeTab]);
+
+  const handleTabSwitch = (tab: 'chat' | 'queue') => {
+    setActiveTab(tab);
+    if (tab === 'chat') {
+      setUnreadChatCount(0);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    } else {
+      setHasNewQueueItem(false);
+    }
+  };
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const isUp = scrollHeight - scrollTop - clientHeight > 60;
+    setIsScrolledUp(isUp);
+  };
+
+  const scrollToBottom = () => {
+    setIsScrolledUp(false);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,15 +106,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
     setInputText('');
     setShowEmojis(false);
+    setIsScrolledUp(false);
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
   const handleQuickReaction = (reaction: string) => {
-    // 1. Emit live floating reaction
     socket.emit('send_reaction', {
       roomId,
       emoji: reaction,
     });
-    // 2. Also emit to chat
     socket.emit('chat_message', {
       roomId,
       text: reaction,
@@ -112,7 +159,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     }
   };
 
-  // Helper to parse @MM:SS or @HH:MM:SS timestamps in chat into clickable seek pills
+  // Clickable @MM:SS timestamps
   const renderMessageWithTimestamps = (text: string) => {
     const timestampRegex = /@(\d{1,2}:\d{2}(?::\d{2})?)/g;
     const parts = [];
@@ -131,7 +178,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
         <button
           key={match.index}
           onClick={() => onSeekToTime && onSeekToTime(seconds)}
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#9146FF]/30 hover:bg-[#9146FF] text-[#BF94FF] hover:text-white font-mono font-bold text-[10px] mx-0.5 transition-colors cursor-pointer select-none"
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#9146FF]/30 hover:bg-[#9146FF] text-[#BF94FF] hover:text-white font-mono font-bold text-[10px] mx-0.5 transition-colors cursor-pointer select-none tabular-nums"
           title={`Seek video to ${timeStr}`}
         >
           <Clock className="w-2.5 h-2.5" />
@@ -170,32 +217,39 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   }
 
   return (
-    <aside className="w-[340px] bg-[#18181B] border-l border-[#2F2F35] flex flex-col h-full overflow-hidden select-none shrink-0">
-      {/* Top Header Switcher (Chat vs Queue) */}
+    <aside className={`${className || 'w-[340px]'} bg-[#18181B] border-l border-[#2F2F35] flex flex-col h-full overflow-hidden select-none shrink-0 relative`}>
+      {/* Top Header Switcher (Chat vs Queue) with Badges */}
       <div className="h-10 px-2 border-b border-[#2F2F35] flex items-center justify-between text-xs shrink-0 bg-[#18181B]">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setActiveTab('chat')}
-            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors ${
+            onClick={() => handleTabSwitch('chat')}
+            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors relative flex items-center gap-1 ${
               activeTab === 'chat'
                 ? 'bg-[#1F1F23] text-white border-b-2 border-[#9146FF]'
                 : 'text-[#ADADB8] hover:text-white'
             }`}
           >
-            Stream Chat
+            <span>Stream Chat</span>
+            {unreadChatCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-[#9146FF] animate-pulse" />
+            )}
           </button>
+
           <button
-            onClick={() => setActiveTab('queue')}
-            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1 ${
+            onClick={() => handleTabSwitch('queue')}
+            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1 relative ${
               activeTab === 'queue'
                 ? 'bg-[#1F1F23] text-white border-b-2 border-[#9146FF]'
                 : 'text-[#ADADB8] hover:text-white'
             }`}
           >
             <span>Queue</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-[#9146FF]/30 text-[#BF94FF] text-[9px] font-mono font-bold">
+            <span className="px-1.5 py-0.2 rounded-full bg-[#9146FF]/30 text-[#BF94FF] text-[9px] font-mono font-bold tabular-nums">
               {queue.length}
             </span>
+            {hasNewQueueItem && (
+              <span className="w-2 h-2 rounded-full bg-[#00F593] animate-pulse" />
+            )}
           </button>
         </div>
 
@@ -203,7 +257,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           <button
             onClick={onToggleCollapse}
             className="p-1 text-[#ADADB8] hover:text-white hover:bg-[#1F1F23] rounded transition-colors"
-            title="Collapse chat"
+            title="Collapse chat (C)"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -272,8 +326,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             </div>
           )}
 
-          {/* Chat Messages Feed */}
-          <div className="flex-1 p-3 overflow-y-auto space-y-2 text-xs font-sans">
+          {/* Chat Messages Feed with onScroll */}
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 p-3 overflow-y-auto space-y-2 text-xs font-sans relative"
+          >
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-4 text-[#ADADB8] space-y-1">
                 <span className="text-lg">💜</span>
@@ -292,7 +350,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
                 return (
                   <div key={m.id} className="leading-relaxed hover:bg-[#1F1F23]/60 -mx-2 px-2 py-0.5 rounded transition-colors break-words">
                     {/* Time */}
-                    <span className="text-[#71717A] text-[10px] font-mono mr-1.5 select-none">
+                    <span className="text-[#71717A] text-[10px] font-mono mr-1.5 select-none tabular-nums">
                       {timeStr}
                     </span>
 
@@ -320,6 +378,17 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Floating Pill: Auto-scroll paused when user scrolls up */}
+          {isScrolledUp && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-[#9146FF] hover:bg-[#772CE8] text-white text-[11px] font-bold shadow-2xl flex items-center gap-1.5 transition-all active:scale-[0.98]"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+              <span>More messages below</span>
+            </button>
+          )}
+
           {/* Quick Reactions Shelf */}
           <div className="px-3 py-1.5 bg-[#18181B] border-t border-[#2F2F35] flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar shrink-0">
             <div className="flex items-center gap-1.5 shrink-0">
@@ -341,7 +410,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             {/* Drop Current Playback Timestamp Button */}
             <button
               onClick={handleDropTimestamp}
-              className="px-2 py-0.5 rounded bg-[#1F1F23] hover:bg-[#9146FF]/30 text-[#BF94FF] text-[10px] font-mono font-bold flex items-center gap-1 border border-[#2F2F35] shrink-0 transition-colors"
+              className="px-2 py-0.5 rounded bg-[#1F1F23] hover:bg-[#9146FF]/30 text-[#BF94FF] text-[10px] font-mono font-bold flex items-center gap-1 border border-[#2F2F35] shrink-0 transition-colors tabular-nums"
               title="Insert current video timestamp into chat"
             >
               <Clock className="w-3 h-3" />
@@ -384,7 +453,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
               <button
                 type="submit"
                 disabled={!inputText.trim()}
-                className="px-3 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] active:bg-[#5C16C5] disabled:opacity-40 disabled:hover:bg-[#9146FF] text-white rounded font-bold text-xs shadow-md transition-all flex items-center gap-1"
+                className="px-3.5 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] disabled:opacity-40 text-white rounded font-bold text-xs shadow-md transition-all flex items-center gap-1"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Chat</span>

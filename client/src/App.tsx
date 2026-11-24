@@ -7,7 +7,8 @@ import { YouTubePlayer } from './components/YouTubePlayer';
 import { ParticipantsList } from './components/ParticipantsList';
 import { ChatBox } from './components/ChatBox';
 import { RequestControlModal } from './components/RequestControlModal';
-import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { AlertCircle, CheckCircle, Info, X, Users, MessageSquare, PlaySquare } from 'lucide-react';
 
 export default function App() {
   const [inRoom, setInRoom] = useState(false);
@@ -37,8 +38,10 @@ export default function App() {
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState<number>(0);
 
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'members'>('chat');
 
   // Bottom-right Toast Notifications
   const [notification, setNotification] = useState<{
@@ -329,6 +332,12 @@ export default function App() {
         e.preventDefault();
         setIsChatCollapsed((prev) => !prev);
       }
+
+      // Question Mark (?): Toggle Keyboard Shortcuts Modal
+      if (e.key === '?' || (e.shiftKey && e.code === 'Slash')) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -392,6 +401,7 @@ export default function App() {
         canControl={canControl}
         onLeaveRoom={handleLeaveRoom}
         onRequestControlOpen={() => setIsRequestModalOpen(true)}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onNotification={showNotification}
       />
 
@@ -399,21 +409,23 @@ export default function App() {
       {!inRoom ? (
         <Lobby onJoin={handleJoinOrCreate} initialRoomCode={initialRoomCode} />
       ) : (
-        /* 3-Column Twitch Theater Layout */
+        /* Theater Layout: Desktop 3-Column, Mobile Stacked with Tab Bar */
         <div className="h-[calc(100vh-50px)] w-full flex flex-col lg:flex-row overflow-hidden">
-          {/* Column 1: Left Party Members Rail */}
-          <ParticipantsList
-            roomId={roomId}
-            participants={participants}
-            currentUserId={currentUserId}
-            currentUserRole={userRole}
-            isCollapsed={isLeftRailCollapsed}
-            onToggleCollapse={() => setIsLeftRailCollapsed(!isLeftRailCollapsed)}
-            onNotification={showNotification}
-          />
+          {/* Desktop Column 1: Left Party Members Rail */}
+          <div className="hidden lg:flex h-full shrink-0">
+            <ParticipantsList
+              roomId={roomId}
+              participants={participants}
+              currentUserId={currentUserId}
+              currentUserRole={userRole}
+              isCollapsed={isLeftRailCollapsed}
+              onToggleCollapse={() => setIsLeftRailCollapsed(!isLeftRailCollapsed)}
+              onNotification={showNotification}
+            />
+          </div>
 
           {/* Column 2: Center Stage Video Theater & Controls */}
-          <main className="flex-1 h-full overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar">
+          <main className="flex-1 h-full overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar min-w-0">
             <YouTubePlayer
               roomId={roomId}
               role={userRole}
@@ -429,25 +441,98 @@ export default function App() {
               onPlaybackTimeUpdate={setCurrentPlaybackTime}
               onNotification={showNotification}
             />
+
+            {/* Mobile / Tablet Tabbed Lower Area (visible only below lg breakpoint) */}
+            <div className="lg:hidden flex flex-col border-t border-[#2F2F35] bg-[#18181B] flex-1 min-h-[350px]">
+              {/* Mobile Tab Header */}
+              <div className="flex border-b border-[#2F2F35] bg-[#18181B] px-2 shrink-0">
+                <button
+                  onClick={() => setMobileTab('chat')}
+                  className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileTab === 'chat'
+                      ? 'border-[#9146FF] text-white bg-[#1F1F23]/60'
+                      : 'border-transparent text-[#ADADB8] hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4 text-[#BF94FF]" />
+                  <span>Chat & Queue</span>
+                  {queue.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#9146FF] text-white font-bold">
+                      {queue.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMobileTab('members')}
+                  className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileTab === 'members'
+                      ? 'border-[#9146FF] text-white bg-[#1F1F23]/60'
+                      : 'border-transparent text-[#ADADB8] hover:text-white'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-[#00F593]" />
+                  <span>Members ({participants.length})</span>
+                </button>
+              </div>
+
+              {/* Mobile Tab Content */}
+              <div className="flex-1 overflow-hidden min-h-[300px]">
+                {mobileTab === 'chat' ? (
+                  <ChatBox
+                    roomId={roomId}
+                    messages={messages}
+                    currentUserId={currentUserId}
+                    currentUserRole={userRole}
+                    pendingRequests={pendingRequests}
+                    queue={queue}
+                    suggestedQueue={suggestedQueue}
+                    currentPlaybackTime={currentPlaybackTime}
+                    isCollapsed={false}
+                    onSeekToTime={handleSeekToTime}
+                    onNotification={showNotification}
+                    className="w-full h-full border-none"
+                  />
+                ) : (
+                  <ParticipantsList
+                    roomId={roomId}
+                    participants={participants}
+                    currentUserId={currentUserId}
+                    currentUserRole={userRole}
+                    isCollapsed={false}
+                    onToggleCollapse={() => {}}
+                    onNotification={showNotification}
+                    className="w-full h-full border-none"
+                  />
+                )}
+              </div>
+            </div>
           </main>
 
-          {/* Column 3: Right Twitch Stream Chat & Video Queue */}
-          <ChatBox
-            roomId={roomId}
-            messages={messages}
-            currentUserId={currentUserId}
-            currentUserRole={userRole}
-            pendingRequests={pendingRequests}
-            queue={queue}
-            suggestedQueue={suggestedQueue}
-            currentPlaybackTime={currentPlaybackTime}
-            isCollapsed={isChatCollapsed}
-            onToggleCollapse={() => setIsChatCollapsed(!isChatCollapsed)}
-            onSeekToTime={handleSeekToTime}
-            onNotification={showNotification}
-          />
+          {/* Desktop Column 3: Right Twitch Stream Chat & Video Queue */}
+          <div className="hidden lg:flex h-full shrink-0">
+            <ChatBox
+              roomId={roomId}
+              messages={messages}
+              currentUserId={currentUserId}
+              currentUserRole={userRole}
+              pendingRequests={pendingRequests}
+              queue={queue}
+              suggestedQueue={suggestedQueue}
+              currentPlaybackTime={currentPlaybackTime}
+              isCollapsed={isChatCollapsed}
+              onToggleCollapse={() => setIsChatCollapsed(!isChatCollapsed)}
+              onSeekToTime={handleSeekToTime}
+              onNotification={showNotification}
+            />
+          </div>
         </div>
       )}
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
 
       {/* Request Action / Control Modal for Participants */}
       <RequestControlModal

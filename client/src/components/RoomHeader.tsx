@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Crown, Shield, User, Search, Film, Send } from 'lucide-react';
+import { Copy, Check, LogOut, Crown, Shield, User, Search, Film, Send, HelpCircle } from 'lucide-react';
 import { Role } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
@@ -12,6 +12,7 @@ interface RoomHeaderProps {
   canControl?: boolean;
   onLeaveRoom?: () => void;
   onRequestControlOpen?: () => void;
+  onOpenShortcuts?: () => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
 }
 
@@ -23,6 +24,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   canControl = false,
   onLeaveRoom,
   onRequestControlOpen,
+  onOpenShortcuts,
   onNotification,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -170,6 +172,17 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
       {/* Right: Role Badge, Avatar & Leave Room */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {inRoom && renderRoleBadge()}
+
+        {/* Keyboard Shortcuts Trigger Button */}
+        {onOpenShortcuts && (
+          <button
+            onClick={onOpenShortcuts}
+            className="p-1.5 bg-[#1F1F23] hover:bg-[#26262C] hover:text-[#9146FF] text-[#ADADB8] rounded-md border border-[#2F2F35] transition-colors flex items-center justify-center"
+            title="Keyboard Shortcuts (?)"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+        )}
 
         {/* User Avatar with online dot */}
         <div className="flex items-center gap-2 bg-[#1F1F23] pl-1.5 pr-2.5 py-1 rounded-full border border-[#2F2F35]">

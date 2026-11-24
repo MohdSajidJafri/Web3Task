@@ -20,7 +20,7 @@ import {
   Unlock,
   Sliders,
   ShieldCheck,
-  Activity
+  Tv
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
@@ -78,13 +78,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const [volume, setVolume] = useState<number>(80);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState<boolean>(false);
   const [scrubberValue, setScrubberValue] = useState<number>(0);
+  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [inlineVideoUrl, setInlineVideoUrl] = useState<string>('');
 
   const socket = getSocket();
   const isHost = role === 'host';
 
-  // Helper to safely execute a programmatic update to the YT Player
+  // Safely execute a programmatic update to the YT Player
   const executeProgrammaticUpdate = useCallback((updateFn: (player: any) => void) => {
     if (!playerRef.current || !isPlayerReadyRef.current) return;
 
@@ -301,6 +303,19 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     socket.emit('seek', { roomId, time: target });
   };
 
+  const handleScrubberMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = Math.min(1, Math.max(0, x / rect.width));
+    setHoveredTime(percent * (duration || 100));
+    setHoverX(x);
+  };
+
+  const handleScrubberMouseLeave = () => {
+    setHoveredTime(null);
+    setHoverX(null);
+  };
+
   const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     setScrubberValue(val);
@@ -368,7 +383,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Host Room Settings toggles
   const handleToggleLock = () => {
     if (!isHost) return;
     socket.emit('update_room_settings', {
@@ -428,6 +442,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         {/* Floating Live Emoji Reactions Overlay */}
         <FloatingReactions reactions={reactions} />
 
+        {/* Click to Unmute Pill if browser autoplay forces muted state */}
+        {isMuted && isPlaying && (
+          <button
+            onClick={handleToggleMute}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] text-white text-xs font-bold shadow-2xl transition-all"
+            title="Click to unmute video"
+          >
+            <VolumeX className="w-4 h-4" />
+            <span>Audio is muted by browser • Click to Unmute</span>
+          </button>
+        )}
+
         {/* Click shield for participants/viewers to prevent accidental local desync */}
         {!canControl && (
           <div
@@ -444,9 +470,23 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
       {/* 2. Custom Twitch-Style Control Bar (directly beneath player) */}
       <div className="bg-[#18181B] border-b border-[#2F2F35] px-3 py-2 flex flex-col gap-2">
-        {/* Scrubber Track */}
-        <div className="relative flex items-center w-full group">
-          <div className="w-full h-1 bg-[#2F2F35] rounded-full overflow-hidden relative">
+        {/* Scrubber Track with Hover Preview Tooltip */}
+        <div
+          onMouseMove={handleScrubberMouseMove}
+          onMouseLeave={handleScrubberMouseLeave}
+          className="relative flex items-center w-full group py-1 cursor-pointer"
+        >
+          {/* Hover Time Tooltip */}
+          {hoveredTime !== null && hoverX !== null && (
+            <div
+              style={{ left: `${hoverX}px` }}
+              className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-[#18181B] border border-[#2F2F35] text-[10px] font-mono text-[#BF94FF] pointer-events-none tabular-nums shadow"
+            >
+              {formatTime(hoveredTime)}
+            </div>
+          )}
+
+          <div className="w-full h-1 group-hover:h-1.5 bg-[#2F2F35] rounded-full overflow-hidden relative transition-all duration-150">
             <div
               className="h-full bg-[#9146FF] transition-all duration-100"
               style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
@@ -473,7 +513,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             <button
               onClick={handlePlayPause}
               className="p-1.5 hover:text-[#9146FF] text-white rounded transition-colors"
-              title={canControl ? (isPlaying ? 'Pause (Space)' : 'Play (Space)') : 'Request Play/Pause'}
+              title={canControl ? (isPlaying ? 'Pause (Space)' : 'Play (Space)') : 'Request Play/Pause (Space)'}
             >
               {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
             </button>
@@ -482,15 +522,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <>
                 <button
                   onClick={() => handleSkip(-10)}
-                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
-                  title="Rewind 10s (Left Arrow)"
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono tabular-nums"
+                  title="Rewind 10s (←)"
                 >
                   -10s
                 </button>
                 <button
                   onClick={() => handleSkip(15)}
-                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
-                  title="Forward 15s (Right Arrow)"
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono tabular-nums"
+                  title="Forward 15s (→)"
                 >
                   +15s
                 </button>
@@ -522,8 +562,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <span>LIVE SYNCED</span>
             </div>
 
-            {/* Time / Duration */}
-            <span className="font-mono text-[11px] text-[#ADADB8]">
+            {/* Time / Duration with Tabular Numbers */}
+            <span className="font-mono text-[11px] text-[#ADADB8] tabular-nums">
               {formatTime(effectiveCurrentTime)} / {formatTime(duration)}
             </span>
           </div>
@@ -532,7 +572,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           <div className="flex items-center gap-2">
             {/* Sync Health & Ping Telemetry */}
             <div
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold ${getSyncColor()}`}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold tabular-nums ${getSyncColor()}`}
               title={`Live playback drift: ${driftSeconds}s | Server ping: ${pingMs}ms`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
@@ -565,7 +605,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       <div className="px-4 py-4 sm:px-6 bg-[#0E0E10] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Host & Title */}
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 min-w-0">
             <div className="relative shrink-0 mt-0.5">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-md ring-2 ring-[#9146FF] ring-offset-2 ring-offset-[#0E0E10]"
@@ -578,26 +618,35 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               </span>
             </div>
 
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <span>{syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}</span>
+            <div className="min-w-0">
+              <h2
+                className="text-sm sm:text-base font-bold text-white tracking-tight line-clamp-1"
+                title={syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
+              >
+                {syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
               </h2>
               <div className="flex items-center gap-2 text-xs text-[#ADADB8] pt-0.5 flex-wrap">
                 <span>Hosted by <span className="font-semibold text-white">{hostName || 'Host'}</span></span>
                 <span>•</span>
-                <span className="text-[#00F593] flex items-center gap-1">
+                <span className="text-[#00F593] flex items-center gap-1 font-mono tabular-nums">
                   👥 {viewerCount} watching
                 </span>
 
                 {/* Status Badges for Lock & Open Controls */}
                 {isLocked && (
-                  <span className="px-1.5 py-0.2 rounded bg-[#EB0400]/20 border border-[#EB0400]/40 text-[#FF4A4A] text-[10px] font-bold flex items-center gap-1">
+                  <span
+                    className="px-1.5 py-0.2 rounded bg-[#EB0400]/20 border border-[#EB0400]/40 text-[#FF4A4A] text-[10px] font-bold flex items-center gap-1"
+                    title="Room is locked by host"
+                  >
                     <Lock className="w-2.5 h-2.5" />
                     <span>LOCKED</span>
                   </span>
                 )}
                 {isOpenControl && (
-                  <span className="px-1.5 py-0.2 rounded bg-[#00F593]/20 border border-[#00F593]/40 text-[#00F593] text-[10px] font-bold flex items-center gap-1">
+                  <span
+                    className="px-1.5 py-0.2 rounded bg-[#00F593]/20 border border-[#00F593]/40 text-[#00F593] text-[10px] font-bold flex items-center gap-1"
+                    title="Open-Party Mode: All participants can control playback"
+                  >
                     <Sliders className="w-2.5 h-2.5" />
                     <span>OPEN CONTROLS</span>
                   </span>
@@ -607,13 +656,13 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           </div>
 
           {/* Right Action Buttons: Host Settings Toggles & Share */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             {isHost && (
               <>
                 {/* Lock Room Toggle */}
                 <button
                   onClick={handleToggleLock}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-all active:scale-[0.98] ${
                     isLocked
                       ? 'bg-[#EB0400]/20 border-[#EB0400] text-[#FF4A4A]'
                       : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
@@ -627,7 +676,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 {/* Open Controls Toggle */}
                 <button
                   onClick={handleToggleOpenControls}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-all active:scale-[0.98] ${
                     isOpenControl
                       ? 'bg-[#00F593]/20 border-[#00F593] text-[#00F593]'
                       : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
@@ -642,7 +691,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
             <button
               onClick={copyShareInvite}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] text-xs font-semibold text-white transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] text-xs font-semibold text-white transition-all shadow-sm"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
               <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
@@ -669,7 +718,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           <button
             type="submit"
             disabled={!inlineVideoUrl.trim()}
-            className={`px-4 py-2 rounded text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5 ${
+            className={`px-4 py-2 rounded text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 active:scale-[0.98] ${
               canControl
                 ? 'bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white'
                 : 'bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35]'
