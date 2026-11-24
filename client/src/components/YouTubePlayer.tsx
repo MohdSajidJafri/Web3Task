@@ -31,9 +31,7 @@ import {
   Gauge,
   Settings,
   Subtitles,
-  Repeat,
-  SkipBack,
-  SkipForward
+  Repeat
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
@@ -141,39 +139,84 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     });
   };
 
+  const handleCycleSpeed = () => {
+    const rates = [0.75, 1, 1.25, 1.5, 2];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextRate = rates[(currentIndex + 1) % rates.length];
+    setPlaybackRate(nextRate);
+    if (playerRef.current && playerRef.current.setPlaybackRate) {
+      try {
+        playerRef.current.setPlaybackRate(nextRate);
+      } catch (err) {
+        console.error('Speed change error:', err);
+      }
+    }
+    onNotification?.(`Playback speed set to ${nextRate}x`, 'info');
+  };
+
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [quality, setQuality] = useState<string>('auto');
   const [captions, setCaptions] = useState<string>('off');
   const [ambientMode, setAmbientMode] = useState<boolean>(true);
   const [loopVideo, setLoopVideo] = useState<boolean>(false);
 
-  const handleToggleCaptions = () => {
-    const nextCap = captions === 'off' ? 'en' : 'off';
-    setCaptions(nextCap);
-    onNotification?.(nextCap === 'off' ? 'Subtitles turned off' : 'Subtitles turned on (EN)', 'info');
-  };
-
-  const handleSelectQuality = (q: string) => {
-    setQuality(q);
-    if (playerRef.current && playerRef.current.setPlaybackQuality) {
-      try {
-        playerRef.current.setPlaybackQuality(q);
-      } catch (err) {}
+  // Track video in watch history whenever current video changes
+  useEffect(() => {
+    if (syncState?.videoId) {
+      addToWatchHistory({
+        videoId: syncState.videoId,
+        title: syncState.videoTitle || `YouTube Video (${syncState.videoId})`,
+        channel: hostName,
+      });
     }
-    onNotification?.(`Quality set to ${q}`, 'info');
+  }, [syncState?.videoId, syncState?.videoTitle, hostName]);
+
+  const handleToggleCaptions = () => {
+    const nextCaptions = captions === 'off' ? 'en' : 'off';
+    setCaptions(nextCaptions);
+    try {
+      if (playerRef.current) {
+        if (nextCaptions !== 'off') {
+          if (playerRef.current.loadModule) playerRef.current.loadModule('captions');
+          if (playerRef.current.setOption) {
+            playerRef.current.setOption('captions', 'track', { languageCode: nextCaptions });
+          }
+        } else {
+          if (playerRef.current.unloadModule) playerRef.current.unloadModule('captions');
+        }
+      }
+    } catch (e) {}
+    onNotification?.(nextCaptions === 'off' ? 'Subtitles turned off' : 'Subtitles turned on (English)', 'info');
   };
 
-  // Programmatic update guard
-  const executeProgrammaticUpdate = useCallback((action: (player: any) => void) => {
-    if (!playerRef.current || !isPlayerReadyRef.current) return;
-    isProgrammaticUpdateRef.current = true;
-    clearTimeout(programmaticTimeoutRef.current);
+  const handleSelectQuality = (newQuality: string) => {
+    setQuality(newQuality);
+    try {
+      if (playerRef.current && playerRef.current.setPlaybackQuality) {
+        playerRef.current.setPlaybackQuality(newQuality);
+      }
+    } catch (e) {}
+    onNotification?.(`Playback quality set to ${newQuality === 'auto' ? 'Auto (1080p)' : newQuality}`, 'info');
+  };
 
-    action(playerRef.current);
+  // Safely execute a programmatic update to the YT Player
+  const executeProgrammaticUpdate = useCallback((updateFn: (player: any) => void) => {
+    if (!playerRef.current || !isPlayerReadyRef.current) return;
+
+    isProgrammaticUpdateRef.current = true;
+    if (programmaticTimeoutRef.current) {
+      clearTimeout(programmaticTimeoutRef.current);
+    }
+
+    try {
+      updateFn(playerRef.current);
+    } catch (e) {
+      console.error('Error executing programmatic player update', e);
+    }
 
     programmaticTimeoutRef.current = setTimeout(() => {
       isProgrammaticUpdateRef.current = false;
-    }, 400);
+    }, 600);
   }, []);
 
   // 1. Load YouTube IFrame API Script
@@ -183,98 +226,77 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       return;
     }
 
-    const existingScript = document.getElementById('youtube-iframe-api');
-    if (!existingScript) {
+    const existingTag = document.getElementById('youtube-iframe-api');
+    if (!existingTag) {
       const tag = document.createElement('script');
       tag.id = 'youtube-iframe-api';
       tag.src = 'https://www.youtube.com/iframe_api';
       const firstScriptTag = document.getElementsByTagName('script')[0];
       firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        setIsApiLoaded(true);
-      };
-    } else {
-      const checkInterval = setInterval(() => {
-        if (window.YT && window.YT.Player) {
-          setIsApiLoaded(true);
-          clearInterval(checkInterval);
-        }
-      }, 100);
-      return () => clearInterval(checkInterval);
     }
+
+    const previousOnReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (previousOnReady) previousOnReady();
+      setIsApiLoaded(true);
+    };
   }, []);
 
-  // 2. Initialize YouTube Player
+  // 2. Instantiate Player once API is loaded
   useEffect(() => {
-    if (!isApiLoaded || playerRef.current) return;
+    if (!isApiLoaded) return;
 
-    const initialId = syncState?.videoId || 'QdBZY2fkU-0';
-    setCurrentVideoId(initialId);
+    const initialVideo = syncState?.videoId || 'M7lc1UVf-VE';
+    setCurrentVideoId(initialVideo);
 
-    const onPlayerReady = (event: any) => {
-      isPlayerReadyRef.current = true;
-      playerRef.current = event.target;
-      try {
-        event.target.setVolume(volume);
-        const dur = event.target.getDuration();
-        if (dur) setDuration(dur);
-      } catch (err) {}
+    const player = new window.YT.Player('youtube-player-element', {
+      videoId: initialVideo,
+      playerVars: {
+        autoplay: 0,
+        controls: 0,
+        modestbranding: 1,
+        rel: 0,
+        origin: window.location.origin,
+        playsinline: 1,
+        enablejsapi: 1,
+      },
+      events: {
+        onReady: (event: any) => {
+          playerRef.current = event.target;
+          isPlayerReadyRef.current = true;
+          setDuration(event.target.getDuration ? event.target.getDuration() : 0);
 
-      if (syncState) {
-        handleInitialSync(syncState);
-      }
-    };
-
-    const onPlayerStateChange = (event: any) => {
-      if (isProgrammaticUpdateRef.current) return;
-
-      const player = event.target;
-      const curTime = player.getCurrentTime ? player.getCurrentTime() : 0;
-      setLocalCurrentTime(curTime);
-
-      if (event.data === window.YT.PlayerState.PLAYING) {
-        if (canControl) {
-          socket.emit('play', { roomId, currentTime: curTime });
-        }
-      } else if (event.data === window.YT.PlayerState.PAUSED) {
-        if (canControl) {
-          socket.emit('pause', { roomId, currentTime: curTime });
-        }
-      } else if (event.data === window.YT.PlayerState.ENDED) {
-        if (role === 'host') {
-          socket.emit('video_ended', { roomId });
-        }
-      }
-    };
-
-    try {
-      new window.YT.Player('youtube-player-element', {
-        videoId: initialId,
-        playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          enablejsapi: 1,
-          fs: 0,
-          modestbranding: 1,
-          rel: 0,
-          iv_load_policy: 3,
+          if (syncState) {
+            handleInitialSync(syncState);
+          }
         },
-        events: {
-          onReady: onPlayerReady,
-          onStateChange: onPlayerStateChange,
+        onStateChange: (event: any) => {
+          if (isProgrammaticUpdateRef.current) return;
+
+          // Video Ended -> Trigger auto next in queue
+          if (event.data === window.YT.PlayerState.ENDED) {
+            socket.emit('video_ended', { roomId });
+            return;
+          }
+
+          if (!canControl) return;
+
+          const currentTime = playerRef.current ? playerRef.current.getCurrentTime() : 0;
+          if (event.data === window.YT.PlayerState.PLAYING) {
+            socket.emit('play', { roomId, currentTime });
+          } else if (event.data === window.YT.PlayerState.PAUSED) {
+            socket.emit('pause', { roomId, currentTime });
+          }
         },
-      });
-    } catch (e) {
-      console.error('Failed to instantiate YouTube player:', e);
-    }
+        onError: () => {
+          onNotification?.('YouTube video cannot be embedded or is unavailable', 'error');
+        },
+      },
+    });
 
     return () => {
-      if (playerRef.current && playerRef.current.destroy) {
-        try {
-          playerRef.current.destroy();
-        } catch (e) {}
+      if (player && player.destroy) {
+        player.destroy();
       }
       isPlayerReadyRef.current = false;
       playerRef.current = null;
@@ -308,25 +330,22 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     const player = playerRef.current;
 
     executeProgrammaticUpdate((p) => {
+      // Handle Video Change
       if (syncState.videoId && syncState.videoId !== currentVideoId) {
         setCurrentVideoId(syncState.videoId);
         p.loadVideoById({
           videoId: syncState.videoId,
           startSeconds: syncState.currentTime || 0,
         });
-        if (syncState.videoTitle) {
-          addToWatchHistory({
-            videoId: syncState.videoId,
-            title: syncState.videoTitle,
-          });
-        }
       }
 
+      // Drift calculation
       const localTime = p.getCurrentTime ? p.getCurrentTime() : 0;
       const serverTime = syncState.currentTime;
       const drift = Math.abs(localTime - serverTime);
       setDriftSeconds(Math.round(drift * 100) / 100);
 
+      // Drift compensation: only seek if drift > 1.2s
       if (drift > 1.2) {
         p.seekTo(serverTime, true);
       }
@@ -357,6 +376,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           setDuration(dur);
         }
 
+        // Live drift check if playing
         if (syncState?.playState === 'playing') {
           const elapsedSinceLastUpdate = (Date.now() - syncState.lastUpdatedAt) / 1000;
           const expectedTime = syncState.currentTime + elapsedSinceLastUpdate;
@@ -519,20 +539,20 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const progressPercent = duration > 0 ? (effectiveCurrentTime / duration) * 100 : 0;
   const hostColor = getTwitchUserColor(hostName || 'Host');
 
-  // Mint Emerald Sync Health Status
+  // Sync health pill status color
   const getSyncColor = () => {
-    if (driftSeconds < 0.5) return 'text-[#2EE59D] border-[#2EE59D]/40 bg-[#2EE59D]/10';
-    if (driftSeconds <= 1.2) return 'text-[#FFA751] border-[#FFA751]/40 bg-[#FFA751]/10';
-    return 'text-[#FF5E62] border-[#FF5E62]/40 bg-[#FF5E62]/10';
+    if (driftSeconds < 0.5) return 'text-[#00F593] border-[#00F593]/40 bg-[#00F593]/10';
+    if (driftSeconds <= 1.2) return 'text-[#FFD700] border-[#FFD700]/40 bg-[#FFD700]/10';
+    return 'text-[#EB0400] border-[#EB0400]/40 bg-[#EB0400]/10';
   };
 
   return (
-    <div ref={containerRef} className="flex flex-col w-full bg-[#131419] text-[#EFEFF1] p-4 lg:p-6 space-y-4">
-      {/* 1. 16:9 Rounded Theater Player Frame (Matching Reference Blueprint) */}
-      <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl shadow-black/60 border border-white/[0.08] flex items-center justify-center group/theater">
-        {/* Warm Ambient Coral Glow Behind Player */}
+    <div ref={containerRef} className="flex flex-col w-full bg-[#0E0E10] text-[#EFEFF1]">
+      {/* 1. 16:9 Black Video Theater Stage */}
+      <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden shadow-2xl">
+        {/* YouTube Ambient Mode Glow */}
         {ambientMode && (
-          <div className="absolute -inset-6 bg-gradient-to-r from-[#FF5E62]/20 via-[#FF9966]/15 to-transparent blur-3xl -z-10 rounded-2xl pointer-events-none transition-opacity duration-500" />
+          <div className="absolute -inset-4 bg-gradient-to-tr from-[#9146FF]/25 via-[#BF94FF]/10 to-transparent blur-3xl -z-10 rounded-2xl pointer-events-none transition-opacity duration-500" />
         )}
 
         <div id="youtube-player-element" className="w-full h-full pointer-events-none" />
@@ -544,7 +564,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         {isMuted && isPlaying && (
           <button
             onClick={handleToggleMute}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 active:scale-[0.98] text-white text-xs font-bold shadow-2xl transition-all"
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] text-white text-xs font-bold shadow-2xl transition-all"
             title="Click to unmute video"
           >
             <VolumeX className="w-4 h-4" />
@@ -552,152 +572,97 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           </button>
         )}
 
-        {/* Click shield for participants/viewers */}
+        {/* Click shield for participants/viewers to prevent accidental local desync */}
         {!canControl && (
           <div
             onClick={onRequestControlOpen}
             className="absolute inset-0 z-10 cursor-pointer bg-transparent hover:bg-black/30 transition-colors flex items-center justify-center group"
           >
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-[#1B1D24]/95 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/[0.08] text-xs font-semibold text-white shadow-2xl flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-[#FFA751]" />
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-[#18181B]/95 backdrop-blur-md px-3.5 py-2 rounded-lg border border-[#2F2F35] text-xs font-semibold text-white shadow-2xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#FFD700]" />
               <span>Synced with Host. Click to request control.</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* 2. Custom Scrubber & Playback Controls Bar (Directly matching reference UI) */}
-      <div className="bg-[#1B1D24] border border-white/[0.08] rounded-2xl p-4 shadow-xl shadow-black/30 space-y-3">
-        {/* Scrubber Track with Timestamps & Coral Gradient Fill */}
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs font-bold text-zinc-400 tabular-nums w-12 text-right">
-            {formatTime(effectiveCurrentTime)}
-          </span>
-
-          <div
-            onMouseMove={handleScrubberMouseMove}
-            onMouseLeave={handleScrubberMouseLeave}
-            className="relative flex-1 flex items-center group py-2 cursor-pointer"
-          >
-            {/* Hover Time Tooltip */}
-            {hoveredTime !== null && hoverX !== null && (
-              <div
-                style={{ left: `${hoverX}px` }}
-                className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded-lg bg-[#242731] border border-white/[0.08] text-[10px] font-mono text-[#FF9966] pointer-events-none tabular-nums shadow-lg"
-              >
-                {formatTime(hoveredTime)}
-              </div>
-            )}
-
-            <div className="w-full h-1.5 group-hover:h-2 bg-[#242731] rounded-full overflow-hidden relative transition-all duration-150">
-              <div
-                className="h-full bg-gradient-to-r from-[#FF5E62] to-[#FF9966] transition-all duration-100"
-                style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
-              />
+      {/* 2. Custom Twitch-Style Control Bar (directly beneath player) */}
+      <div className="bg-[#18181B] border-b border-[#2F2F35] px-3 py-2 flex flex-col gap-2">
+        {/* Scrubber Track with Hover Preview Tooltip */}
+        <div
+          onMouseMove={handleScrubberMouseMove}
+          onMouseLeave={handleScrubberMouseLeave}
+          className="relative flex items-center w-full group py-1 cursor-pointer"
+        >
+          {/* Hover Time Tooltip */}
+          {hoveredTime !== null && hoverX !== null && (
+            <div
+              style={{ left: `${hoverX}px` }}
+              className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-[#18181B] border border-[#2F2F35] text-[10px] font-mono text-[#BF94FF] pointer-events-none tabular-nums shadow"
+            >
+              {formatTime(hoveredTime)}
             </div>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={0.5}
-              value={effectiveCurrentTime}
-              onChange={handleScrubberChange}
-              onMouseUp={handleScrubberCommit}
-              onTouchEnd={handleScrubberCommit}
-              disabled={!canControl}
-              className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 cursor-pointer disabled:cursor-not-allowed"
+          )}
+
+          <div className="w-full h-1 group-hover:h-1.5 bg-[#2F2F35] rounded-full overflow-hidden relative transition-all duration-150">
+            <div
+              className="h-full bg-[#9146FF] transition-all duration-100"
+              style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
             />
           </div>
-
-          <span className="font-mono text-xs font-bold text-zinc-400 tabular-nums w-12">
-            {formatTime(duration)}
-          </span>
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            step={0.5}
+            value={effectiveCurrentTime}
+            onChange={handleScrubberChange}
+            onMouseUp={handleScrubberCommit}
+            onTouchEnd={handleScrubberCommit}
+            disabled={!canControl}
+            className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 cursor-pointer disabled:cursor-not-allowed"
+          />
         </div>
 
         {/* Controls Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-          {/* Left: Play/Pause, Skips, Title & Metadata */}
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Play/Pause Button in Tactile Rounded Box */}
+        <div className="flex items-center justify-between text-xs">
+          {/* Left Controls */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={handlePlayPause}
-              className="w-10 h-10 rounded-xl bg-[#242731] hover:bg-[#2C303D] active:scale-[0.98] border border-white/[0.08] hover:border-[#FF5E62]/40 text-white flex items-center justify-center transition-all shadow-md shrink-0"
+              className="p-1.5 hover:text-[#9146FF] text-white rounded transition-colors"
               title={canControl ? (isPlaying ? 'Pause (Space)' : 'Play (Space)') : 'Request Play/Pause (Space)'}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-current text-[#FF9966]" /> : <Play className="w-5 h-5 fill-current ml-0.5 text-white" />}
+              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
             </button>
 
             {canControl && (
-              <div className="hidden md:flex items-center gap-1.5">
+              <>
                 <button
                   onClick={() => handleSkip(-10)}
-                  className="px-2 py-1 rounded-lg bg-[#242731] hover:bg-[#2C303D] text-zinc-400 hover:text-white border border-white/[0.08] text-[10px] font-mono tabular-nums transition-colors"
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono tabular-nums"
                   title="Rewind 10s (←)"
                 >
                   -10s
                 </button>
                 <button
                   onClick={() => handleSkip(15)}
-                  className="px-2 py-1 rounded-lg bg-[#242731] hover:bg-[#2C303D] text-zinc-400 hover:text-white border border-white/[0.08] text-[10px] font-mono tabular-nums transition-colors"
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono tabular-nums"
                   title="Forward 15s (→)"
                 >
                   +15s
                 </button>
-              </div>
+              </>
             )}
 
-            {/* Video Title & Host Metadata */}
-            <div className="min-w-0">
-              <h3
-                className="text-sm font-bold text-white truncate max-w-sm sm:max-w-md"
-                title={syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
-              >
-                {syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
-              </h3>
-              <p className="text-[11px] text-zinc-400 truncate">
-                Hosted by <span className="text-white font-semibold">{hostName}</span> • {viewerCount} Friends Online
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Telemetry Pill, Change Video CTA, Settings & Fullscreen */}
-          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-            {/* Mint Synced Telemetry Pill */}
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-mono font-bold tabular-nums shadow-sm ${getSyncColor()}`}
-              title={`Live playback drift: ${driftSeconds}s | Server ping: ${pingMs}ms`}
-            >
-              <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              <span>Synced • {pingMs}ms</span>
-            </div>
-
-            {/* Change Video Warm Orange Pill Button */}
-            <button
-              onClick={() => {
-                if (canControl) {
-                  const input = prompt('Enter YouTube Video URL or ID:');
-                  if (input && input.trim()) {
-                    socket.emit('change_video', { roomId, videoId: input.trim() });
-                    onNotification?.('Updating video...', 'info');
-                  }
-                } else {
-                  onRequestControlOpen();
-                }
-              }}
-              className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#FF8C42] to-[#FFA751] hover:brightness-110 active:scale-[0.98] text-white font-bold text-xs shadow-md shadow-[#FF8C42]/20 transition-all flex items-center gap-1.5"
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>Change Video</span>
-            </button>
-
             {/* Volume */}
-            <div className="hidden lg:flex items-center gap-1.5 bg-[#242731] border border-white/[0.08] px-2.5 py-1 rounded-xl">
+            <div className="flex items-center gap-1.5 group/vol">
               <button
                 onClick={handleToggleMute}
-                className="text-zinc-400 hover:text-white transition-colors"
+                className="p-1 text-[#ADADB8] hover:text-white transition-colors"
                 title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
               >
-                {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4" />}
+                {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
               <input
                 type="range"
@@ -705,17 +670,42 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 max={100}
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-14 h-1 bg-[#1B1D24] accent-[#FF5E62] rounded appearance-none cursor-pointer"
+                className="w-16 h-1 bg-[#2F2F35] accent-[#9146FF] rounded appearance-none cursor-pointer"
               />
             </div>
 
-            {/* CC Subtitles Button */}
+            {/* Live Synced Badge */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#9146FF]/20 border border-[#9146FF]/40 text-[#BF94FF] text-[10px] font-bold tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00F593] animate-pulse" />
+              <span>LIVE SYNCED</span>
+            </div>
+
+            {/* Time / Duration with Tabular Numbers */}
+            <span className="font-mono text-[11px] text-[#ADADB8] tabular-nums">
+              {formatTime(effectiveCurrentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+
+          {/* Right Controls: Telemetry Health Pill & Fullscreen */}
+          <div className="flex items-center gap-2">
+            {/* Sync Health & Ping Telemetry */}
+            <div
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold tabular-nums ${getSyncColor()}`}
+              title={`Live playback drift: ${driftSeconds}s | Server ping: ${pingMs}ms`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+              <span>{driftSeconds}s drift</span>
+              <span>•</span>
+              <span>{pingMs}ms</span>
+            </div>
+
+            {/* Subtitles / Closed Captions [CC] Button */}
             <button
               onClick={handleToggleCaptions}
-              className={`px-2 py-1 rounded-xl text-[11px] font-bold font-mono border transition-all ${
+              className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono border transition-all ${
                 captions !== 'off'
-                  ? 'bg-[#FF5E62]/20 border-[#FF5E62] text-[#FF9966]'
-                  : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-400 hover:text-white'
+                  ? 'bg-[#9146FF]/30 border-[#9146FF] text-[#BF94FF]'
+                  : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
               }`}
               title={captions !== 'off' ? 'Turn off Subtitles (c)' : 'Turn on Subtitles (c)'}
             >
@@ -726,14 +716,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             <div className="relative">
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`p-2 rounded-xl border border-white/[0.08] transition-colors ${
+                className={`p-1.5 rounded-md transition-colors ${
                   isSettingsOpen
-                    ? 'bg-[#2C303D] text-[#FF9966]'
-                    : 'bg-[#242731] text-zinc-400 hover:text-white hover:bg-[#2C303D]'
+                    ? 'bg-[#26262C] text-[#9146FF]'
+                    : 'text-[#ADADB8] hover:text-white hover:bg-[#1F1F23]'
                 }`}
-                title="Settings (Speed, Quality, Captions, Ambient)"
+                title="Settings (Speed, Quality, Captions, Ambient, Loop)"
               >
-                <Settings className={`w-4 h-4 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90 text-[#FF9966]' : ''}`} />
+                <Settings className={`w-4 h-4 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90 text-[#9146FF]' : ''}`} />
               </button>
 
               <PlayerSettingsMenu
@@ -767,10 +757,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               />
             </div>
 
-            {/* Fullscreen Button */}
+            <button
+              onClick={handleManualResync}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35] text-[11px] font-medium transition-colors"
+              title="Force re-align with room clock"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Re-sync</span>
+            </button>
+
             <button
               onClick={handleFullscreen}
-              className="p-2 bg-[#242731] hover:bg-[#2C303D] border border-white/[0.08] text-zinc-400 hover:text-white rounded-xl transition-colors"
+              className="p-1 text-[#ADADB8] hover:text-white transition-colors"
               title="Toggle Fullscreen (F)"
             >
               <Maximize2 className="w-4 h-4" />
@@ -779,73 +777,225 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         </div>
       </div>
 
-      {/* 3. Host Controls Strip (Lock Room, Open Controls, Share Invite) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#1B1D24] border border-white/[0.08] rounded-2xl px-5 py-3">
-        {/* Host Toggles */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {isHost ? (
-            <>
-              <button
-                onClick={handleToggleLock}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all active:scale-[0.98] ${
-                  isLocked
-                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300 hover:text-white'
-                }`}
-                title={isLocked ? 'Room is locked to new joiners. Click to unlock.' : 'Click to lock room from new joiners'}
-              >
-                {isLocked ? <Lock className="w-3.5 h-3.5 text-rose-400" /> : <Unlock className="w-3.5 h-3.5" />}
-                <span>{isLocked ? 'Locked Room' : 'Lock Room'}</span>
-              </button>
+      {/* 3. YouTube Video Title, Channel & Engagement Actions */}
+      <div className="px-4 py-4 sm:px-6 bg-[#0E0E10] space-y-4">
+        {/* Video Title */}
+        <div className="space-y-1">
+          <h2
+            className="text-base sm:text-lg font-black text-white tracking-tight leading-snug line-clamp-2"
+            title={syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
+          >
+            {syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
+          </h2>
+        </div>
 
-              <button
-                onClick={handleToggleOpenControls}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all active:scale-[0.98] ${
-                  isOpenControl
-                    ? 'bg-[#2EE59D]/15 border-[#2EE59D]/40 text-[#2EE59D]'
-                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300 hover:text-white'
-                }`}
-                title={isOpenControl ? 'All members can control playback. Click to restrict.' : 'Click to allow all participants to control video'}
+        {/* Channel Row & Engagement Actions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 border-b border-[#2F2F35]/80 pb-4">
+          {/* Left: Channel Info, Host and Subscribe */}
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-md ring-2 ring-[#9146FF] ring-offset-2 ring-offset-[#0E0E10]"
+                style={{ backgroundColor: hostColor }}
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>{isOpenControl ? 'Open Controls ON' : 'Open Controls'}</span>
-              </button>
-            </>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${isLocked ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
-                {isLocked ? '🔒 Room Locked' : '🔓 Open Room'}
-              </span>
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${isOpenControl ? 'bg-[#2EE59D]/15 text-[#2EE59D] border-[#2EE59D]/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
-                {isOpenControl ? '🎛️ Open Controls' : '🛡️ Host Controls'}
+                {hostName ? hostName.charAt(0).toUpperCase() : 'H'}
+              </div>
+              <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-[#EB0400] text-white text-[8px] font-black uppercase rounded shadow">
+                LIVE
               </span>
             </div>
-          )}
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm text-white truncate max-w-[160px]">{hostName || 'Host'}</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#BF94FF] shrink-0" />
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[#ADADB8]">
+                <span className="font-mono tabular-nums text-[#00F593]">👥 {viewerCount} in party</span>
+                <span>•</span>
+                <span>2.48M subscribers</span>
+              </div>
+            </div>
+
+            {/* Subscribe Button */}
+            <button
+              onClick={handleToggleSubscribe}
+              className={`ml-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
+                isSubscribed
+                  ? 'bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35]'
+                  : 'bg-white hover:bg-[#EFEFF1] text-black shadow-md'
+              }`}
+            >
+              {isSubscribed ? (
+                <>
+                  <Bell className="w-3.5 h-3.5 text-[#00F593]" />
+                  <span>Subscribed</span>
+                </>
+              ) : (
+                <span>Subscribe</span>
+              )}
+            </button>
+          </div>
+
+          {/* Right: Likes, Share, Autoplay, Host Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Like / Dislike Pill */}
+            <div className="flex items-center bg-[#1F1F23] border border-[#2F2F35] rounded-full overflow-hidden text-xs">
+              <button
+                onClick={handleToggleLike}
+                className={`flex items-center gap-1.5 px-3 py-1.5 hover:bg-[#26262C] transition-colors ${
+                  isLiked ? 'text-[#9146FF] font-bold' : 'text-white'
+                }`}
+                title="I like this"
+              >
+                <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                <span className="font-mono tabular-nums text-[11px]">{likeCount.toLocaleString()}</span>
+              </button>
+              <div className="w-[1px] h-4 bg-[#2F2F35]" />
+              <button
+                onClick={handleToggleDislike}
+                className={`p-1.5 px-2.5 hover:bg-[#26262C] transition-colors ${
+                  isDisliked ? 'text-[#FF4A4A]' : 'text-[#ADADB8] hover:text-white'
+                }`}
+                title="I dislike this"
+              >
+                <ThumbsDown className={`w-3.5 h-3.5 ${isDisliked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {/* Autoplay Toggle */}
+            <button
+              onClick={() => {
+                setAutoplayNext(!autoplayNext);
+                onNotification?.(autoplayNext ? 'Autoplay is turned off' : 'Autoplay is turned on', 'info');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                autoplayNext
+                  ? 'bg-[#9146FF]/20 border-[#9146FF]/50 text-[#BF94FF]'
+                  : 'bg-[#1F1F23] border-[#2F2F35] text-[#ADADB8]'
+              }`}
+              title="Auto-play next video when current video ends"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span className="text-[11px]">Autoplay: {autoplayNext ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Host Controls */}
+            {isHost && (
+              <>
+                <button
+                  onClick={handleToggleLock}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
+                    isLocked
+                      ? 'bg-[#EB0400]/20 border-[#EB0400] text-[#FF4A4A]'
+                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                  }`}
+                  title={isLocked ? 'Room is locked to new joiners. Click to unlock.' : 'Click to lock room from new joiners'}
+                >
+                  {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                  <span>{isLocked ? 'Locked' : 'Lock Room'}</span>
+                </button>
+
+                <button
+                  onClick={handleToggleOpenControls}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
+                    isOpenControl
+                      ? 'bg-[#00F593]/20 border-[#00F593] text-[#00F593]'
+                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                  }`}
+                  title={isOpenControl ? 'All members can control playback. Click to restrict.' : 'Click to allow all participants to control video'}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>{isOpenControl ? 'Open Controls ON' : 'Open Controls'}</span>
+                </button>
+              </>
+            )}
+
+            {/* Share Invite */}
+            <button
+              onClick={copyShareInvite}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] text-xs font-semibold text-white transition-all shadow-sm"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied' : 'Share'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Share Invite & Re-Sync */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleManualResync}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#242731] hover:bg-[#2C303D] text-zinc-300 hover:text-white border border-white/[0.08] text-xs font-medium transition-colors"
-            title="Force re-align with room clock"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Re-sync</span>
-          </button>
+        {/* Collapsible YouTube Description Box */}
+        <div
+          onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+          className="bg-[#18181B] hover:bg-[#1F1F23] border border-[#2F2F35] rounded-xl p-3.5 text-xs text-[#EFEFF1] cursor-pointer transition-colors space-y-2 select-none"
+        >
+          <div className="flex items-center gap-2 font-bold font-mono text-[11px] text-[#ADADB8] flex-wrap">
+            <span className="text-white">1,482,903 views</span>
+            <span>•</span>
+            <span>Streamed live in Watch Party</span>
+            <span>•</span>
+            <span className="text-[#9146FF]">#WatchParty</span>
+            <span className="text-[#9146FF]">#YouTubeTheater</span>
+            <span className="text-[#9146FF]">#SyncParty</span>
+          </div>
+
+          <p className={`text-xs text-[#ADADB8] leading-relaxed ${isDescriptionExpanded ? '' : 'line-clamp-2'}`}>
+            Welcome to the official real-time synchronized YouTube Watch Party! Everyone in this room experiences 100% frame-accurate playback, shared queue management, instant reactions, and low-latency party chat. Host: <span className="text-white font-semibold">{hostName}</span> • Party Code: <span className="font-mono font-bold text-white">{roomId}</span>.
+          </p>
 
           <button
-            onClick={copyShareInvite}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 active:scale-[0.98] text-white font-bold text-xs shadow-md shadow-[#FF5E62]/20 transition-all"
+            type="button"
+            className="font-bold text-white text-[11px] hover:text-[#BF94FF] flex items-center gap-1 pt-0.5"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
+            {isDescriptionExpanded ? (
+              <>
+                <span>Show less</span>
+                <ChevronUp className="w-3.5 h-3.5" />
+              </>
+            ) : (
+              <>
+                <span>...more</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </>
+            )}
           </button>
         </div>
-      </div>
 
-      {/* 4. Suggested & Recommended Videos Shelf */}
-      <div className="bg-[#1B1D24] border border-white/[0.08] rounded-2xl p-5 shadow-xl shadow-black/30">
+        {/* Quick Inline Change Video Bar */}
+        <form onSubmit={handleInlineVideoSubmit} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Film className="w-4 h-4 text-[#ADADB8] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={
+                canControl
+                  ? "Paste YouTube URLs to Change Video (e.g., https://youtu.be/...)"
+                  : "Paste YouTube URL to request video change from Host..."
+              }
+              value={inlineVideoUrl}
+              onChange={(e) => setInlineVideoUrl(e.target.value)}
+              className="w-full bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded pl-9 pr-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!inlineVideoUrl.trim()}
+            className={`px-4 py-2 rounded text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 active:scale-[0.98] ${
+              canControl
+                ? 'bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white'
+                : 'bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35]'
+            }`}
+          >
+            {canControl ? (
+              <span>Change Video</span>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5 text-[#BF94FF]" />
+                <span>Request Video</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* 5. Recommended / Suggested Videos Shelf */}
         <RecommendedVideos
           roomId={roomId}
           canControl={canControl}

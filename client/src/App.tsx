@@ -39,7 +39,7 @@ export default function App() {
 
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(true);
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'members'>('chat');
 
@@ -392,8 +392,8 @@ export default function App() {
   const hostName = hostParticipant ? hostParticipant.username : 'Host';
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#131419] text-[#EFEFF1] font-sans overflow-hidden">
-      {/* 1. Top Navigation Bar (56px) */}
+    <div className="h-screen w-screen flex flex-col bg-[#0E0E10] text-[#EFEFF1] font-sans overflow-hidden">
+      {/* 1. Twitch Top Navigation Bar (50px fixed) */}
       <RoomHeader
         roomId={roomId}
         userRole={userRole}
@@ -410,26 +410,23 @@ export default function App() {
       {!inRoom ? (
         <Lobby onJoin={handleJoinOrCreate} initialRoomCode={initialRoomCode} />
       ) : (
-        /* Theater Layout: Wide Stage + Right Social Sidebar (3 tabs: Live Chat | Queue | Members) */
-        <div className="h-[calc(100vh-56px)] w-full flex flex-col lg:flex-row overflow-hidden">
-          {/* Optional Desktop Column 1: Left Party Members Rail (collapsible) */}
-          {!isLeftRailCollapsed && (
-            <div className="hidden lg:flex h-full shrink-0">
-              <ParticipantsList
-                roomId={roomId}
-                participants={participants}
-                currentUserId={currentUserId}
-                currentUserRole={userRole}
-                pendingRequests={pendingRequests}
-                isCollapsed={isLeftRailCollapsed}
-                onToggleCollapse={() => setIsLeftRailCollapsed(!isLeftRailCollapsed)}
-                onNotification={showNotification}
-              />
-            </div>
-          )}
+        /* Theater Layout: Desktop 3-Column, Mobile Stacked with Tab Bar */
+        <div className="h-[calc(100vh-50px)] w-full flex flex-col lg:flex-row overflow-hidden">
+          {/* Desktop Column 1: Left Party Members Rail */}
+          <div className="hidden lg:flex h-full shrink-0">
+            <ParticipantsList
+              roomId={roomId}
+              participants={participants}
+              currentUserId={currentUserId}
+              currentUserRole={userRole}
+              isCollapsed={isLeftRailCollapsed}
+              onToggleCollapse={() => setIsLeftRailCollapsed(!isLeftRailCollapsed)}
+              onNotification={showNotification}
+            />
+          </div>
 
           {/* Column 2: Center Stage Video Theater & Controls */}
-          <main className="flex-1 h-full overflow-y-auto bg-[#131419] flex flex-col no-scrollbar min-w-0">
+          <main className="flex-1 h-full overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar min-w-0">
             <YouTubePlayer
               roomId={roomId}
               role={userRole}
@@ -447,26 +444,72 @@ export default function App() {
             />
 
             {/* Mobile / Tablet Tabbed Lower Area (visible only below lg breakpoint) */}
-            <div className="lg:hidden flex flex-col border-t border-white/[0.08] bg-[#1B1D24] flex-1 min-h-[350px]">
-              <ChatBox
-                roomId={roomId}
-                messages={messages}
-                currentUserId={currentUserId}
-                currentUserRole={userRole}
-                pendingRequests={pendingRequests}
-                queue={queue}
-                suggestedQueue={suggestedQueue}
-                currentPlaybackTime={currentPlaybackTime}
-                participants={participants}
-                isCollapsed={false}
-                onSeekToTime={handleSeekToTime}
-                onNotification={showNotification}
-                className="w-full h-full border-none"
-              />
+            <div className="lg:hidden flex flex-col border-t border-[#2F2F35] bg-[#18181B] flex-1 min-h-[350px]">
+              {/* Mobile Tab Header */}
+              <div className="flex border-b border-[#2F2F35] bg-[#18181B] px-2 shrink-0">
+                <button
+                  onClick={() => setMobileTab('chat')}
+                  className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileTab === 'chat'
+                      ? 'border-[#9146FF] text-white bg-[#1F1F23]/60'
+                      : 'border-transparent text-[#ADADB8] hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4 text-[#BF94FF]" />
+                  <span>Chat & Queue</span>
+                  {queue.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#9146FF] text-white font-bold">
+                      {queue.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMobileTab('members')}
+                  className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileTab === 'members'
+                      ? 'border-[#9146FF] text-white bg-[#1F1F23]/60'
+                      : 'border-transparent text-[#ADADB8] hover:text-white'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-[#00F593]" />
+                  <span>Members ({participants.length})</span>
+                </button>
+              </div>
+
+              {/* Mobile Tab Content */}
+              <div className="flex-1 overflow-hidden min-h-[300px]">
+                {mobileTab === 'chat' ? (
+                  <ChatBox
+                    roomId={roomId}
+                    messages={messages}
+                    currentUserId={currentUserId}
+                    currentUserRole={userRole}
+                    pendingRequests={pendingRequests}
+                    queue={queue}
+                    suggestedQueue={suggestedQueue}
+                    currentPlaybackTime={currentPlaybackTime}
+                    isCollapsed={false}
+                    onSeekToTime={handleSeekToTime}
+                    onNotification={showNotification}
+                    className="w-full h-full border-none"
+                  />
+                ) : (
+                  <ParticipantsList
+                    roomId={roomId}
+                    participants={participants}
+                    currentUserId={currentUserId}
+                    currentUserRole={userRole}
+                    isCollapsed={false}
+                    onToggleCollapse={() => {}}
+                    onNotification={showNotification}
+                    className="w-full h-full border-none"
+                  />
+                )}
+              </div>
             </div>
           </main>
 
-          {/* Desktop Column 3: Right Social Sidebar (360px - 380px) with 3 tabs */}
+          {/* Desktop Column 3: Right Twitch Stream Chat & Video Queue */}
           <div className="hidden lg:flex h-full shrink-0">
             <ChatBox
               roomId={roomId}
@@ -477,7 +520,6 @@ export default function App() {
               queue={queue}
               suggestedQueue={suggestedQueue}
               currentPlaybackTime={currentPlaybackTime}
-              participants={participants}
               isCollapsed={isChatCollapsed}
               onToggleCollapse={() => setIsChatCollapsed(!isChatCollapsed)}
               onSeekToTime={handleSeekToTime}
@@ -503,27 +545,27 @@ export default function App() {
 
       {/* Toast Notification (Bottom-Right Corner) */}
       {notification && (
-        <div className="fixed bottom-5 right-5 z-50 animate-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 duration-200">
           <div
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl border shadow-2xl text-xs font-semibold backdrop-blur-md bg-[#1B1D24] shadow-black/50 ${
+            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border shadow-2xl text-xs font-semibold backdrop-blur-md bg-[#18181B] ${
               notification.type === 'error'
-                ? 'border-rose-500/40 text-rose-300'
+                ? 'border-[#EB0400] text-[#FF4A4A]'
                 : notification.type === 'success'
-                ? 'border-[#2EE59D]/40 text-[#2EE59D]'
-                : 'border-[#FF5E62]/40 text-[#FF9966]'
+                ? 'border-[#00F593] text-[#00F593]'
+                : 'border-[#9146FF] text-[#BF94FF]'
             }`}
           >
             {notification.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-[#EB0400] shrink-0" />
             ) : notification.type === 'success' ? (
-              <CheckCircle className="w-4 h-4 text-[#2EE59D] shrink-0" />
+              <CheckCircle className="w-4 h-4 text-[#00F593] shrink-0" />
             ) : (
-              <Info className="w-4 h-4 text-[#FF9966] shrink-0" />
+              <Info className="w-4 h-4 text-[#BF94FF] shrink-0" />
             )}
             <span>{notification.msg}</span>
             <button
               onClick={() => setNotification(null)}
-              className="ml-2 text-zinc-400 hover:text-white"
+              className="ml-2 text-[#ADADB8] hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>

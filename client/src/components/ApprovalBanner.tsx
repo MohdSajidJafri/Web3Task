@@ -31,39 +31,39 @@ export const ApprovalBanner: React.FC<ApprovalBannerProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-r from-amber-500/10 via-rose-500/5 to-amber-500/10 border border-amber-500/30 rounded-2xl p-4 shadow-xl shadow-black/30 space-y-3">
+    <div className="bg-amber-950/40 border border-amber-600/40 rounded-2xl p-4 shadow-xl space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+        <div className="flex items-center gap-2 text-amber-300 font-semibold text-sm">
           <ShieldAlert className="w-5 h-5 text-amber-400 animate-pulse" />
           <span>Pending Participant Requests ({requests.length})</span>
         </div>
-        <span className="text-xs text-amber-400/80 font-medium">Host / Moderator Approval Required</span>
+        <span className="text-xs text-amber-400/80">Host / Moderator Approval Required</span>
       </div>
 
       <div className="space-y-2">
         {requests.map((req) => (
           <div
             key={req.requestId}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#1B1D24] border border-white/[0.08] rounded-xl p-3 shadow-md"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-xl p-3"
           >
             <div className="flex items-start gap-2.5">
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 mt-0.5">
                 <Clock className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">
-                  <span className="text-[#FF9966] font-bold">{req.requesterName}</span>{' '}
-                  <span className="text-zinc-300">
+                <p className="text-sm font-medium text-slate-100">
+                  <span className="text-red-400 font-semibold">{req.requesterName}</span>{' '}
+                  <span className="text-slate-300">
                     {req.label || `requested: ${req.action}`}
                   </span>
                 </p>
                 {req.action === 'change_video' && req.payload?.videoId && (
-                  <p className="text-xs font-mono text-zinc-400">
+                  <p className="text-xs font-mono text-slate-400">
                     Video ID: <span className="text-amber-300">{req.payload.videoId}</span>
                   </p>
                 )}
                 {req.action === 'seek' && typeof req.payload?.time === 'number' && (
-                  <p className="text-xs font-mono text-zinc-400">
+                  <p className="text-xs font-mono text-slate-400">
                     Target Time: <span className="text-amber-300">{req.payload.time}s</span>
                   </p>
                 )}
@@ -73,14 +73,14 @@ export const ApprovalBanner: React.FC<ApprovalBannerProps> = ({
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <button
                 onClick={() => handleRespond(req.requestId, true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#2EE59D] hover:bg-[#25C786] text-black font-bold text-xs shadow-md transition-all active:scale-[0.98]"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition-all"
               >
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <Check className="w-3.5 h-3.5" />
                 <span>Approve</span>
               </button>
               <button
                 onClick={() => handleRespond(req.requestId, false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#242731] hover:bg-[#2C303D] text-zinc-300 hover:text-white font-medium text-xs border border-white/[0.08] transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs border border-slate-700 transition-all"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Reject</span>

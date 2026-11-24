@@ -86,7 +86,7 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
   };
 
   return (
-    <div className="bg-[#1B1D24] border border-white/[0.08] rounded-2xl p-4 shadow-xl space-y-4">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
       {/* Scrubber & Playback Controls */}
       <div className="flex flex-col sm:flex-row items-center gap-4">
         {/* Play/Pause Button */}
@@ -96,9 +96,9 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
             className={`flex items-center justify-center w-12 h-12 rounded-xl transition-all shadow-lg font-semibold ${
               canControl
                 ? isPlaying
-                  ? 'bg-gradient-to-r from-[#FF8C42] to-[#FFA751] hover:brightness-110 text-white shadow-[#FF8C42]/20'
-                  : 'bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 text-white shadow-[#FF5E62]/20'
-                : 'bg-[#242731] hover:bg-[#2C303D] text-zinc-300'
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-red-600 hover:bg-red-500 text-white'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
             }`}
             title={canControl ? (isPlaying ? 'Pause' : 'Play') : 'Request Play/Pause'}
           >
@@ -110,14 +110,14 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
             <>
               <button
                 onClick={() => handleSkip(-10)}
-                className="px-2.5 py-1.5 rounded-xl bg-[#242731] hover:bg-[#2C303D] text-zinc-300 hover:text-white text-xs font-mono border border-white/[0.08]"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono border border-slate-700/60"
                 title="Rewind 10s"
               >
                 -10s
               </button>
               <button
                 onClick={() => handleSkip(15)}
-                className="px-2.5 py-1.5 rounded-xl bg-[#242731] hover:bg-[#2C303D] text-zinc-300 hover:text-white text-xs font-mono border border-white/[0.08]"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono border border-slate-700/60"
                 title="Forward 15s"
               >
                 +15s
@@ -128,7 +128,7 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
 
         {/* Timeline Slider */}
         <div className="flex-1 w-full flex items-center gap-3">
-          <span className="text-xs font-mono text-zinc-400 w-12 text-right">
+          <span className="text-xs font-mono text-slate-400 w-12 text-right">
             {formatTime(currentTime)}
           </span>
           <input

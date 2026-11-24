@@ -271,13 +271,13 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
         {/* Quick Search */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-[#ADADB8] absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Filter suggested videos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-[#242731] hover:bg-[#2C303D] focus:bg-[#131419] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-colors w-48 sm:w-56"
+              className="bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors w-48 sm:w-56"
             />
           </div>
         </div>
@@ -293,8 +293,8 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
               onClick={() => setSelectedCategory(cat.label)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 active:scale-[0.98] ${
                 isActive
-                  ? 'bg-gradient-to-r from-[#FF5E62] to-[#FF9966] text-white font-bold shadow-md shadow-[#FF5E62]/20'
-                  : 'bg-[#242731] hover:bg-[#2C303D] text-zinc-300 border border-white/[0.08]'
+                  ? 'bg-white text-black font-bold shadow-md shadow-white/10'
+                  : 'bg-[#1F1F23] hover:bg-[#26262C] text-[#EFEFF1] border border-[#2F2F35]'
               }`}
             >
               {cat.icon}
@@ -313,10 +313,10 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
           return (
             <div
               key={video.id}
-              className={`group bg-[#242731] hover:bg-[#2C303D] border rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-lg ${
+              className={`group bg-[#18181B] hover:bg-[#1F1F23] border rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-md ${
                 isCurrentlyPlaying
-                  ? 'border-[#FF5E62] ring-1 ring-[#FF5E62] shadow-[#FF5E62]/15'
-                  : 'border-white/[0.08] hover:border-white/[0.2]'
+                  ? 'border-[#9146FF] ring-1 ring-[#9146FF] shadow-[#9146FF]/10'
+                  : 'border-[#2F2F35] hover:border-[#464649]'
               }`}
             >
               {/* Thumbnail Stage with Badges & Hover Overlay */}
@@ -327,15 +327,16 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                   onError={(e) => {
+                    // Fallback thumbnail if mqdefault fails
                     (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
                   }}
                 />
 
                 {/* Duration Badge */}
                 <span
-                  className={`absolute bottom-2 right-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold font-mono tracking-wider shadow ${
+                  className={`absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider shadow ${
                     video.duration === 'LIVE'
-                      ? 'bg-[#FF5E62] text-white flex items-center gap-1'
+                      ? 'bg-[#EB0400] text-white flex items-center gap-1'
                       : 'bg-black/85 text-white backdrop-blur-sm'
                   }`}
                 >
@@ -345,8 +346,8 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
 
                 {/* Now Playing Banner */}
                 {isCurrentlyPlaying && (
-                  <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-[#FF5E62] to-[#FF9966] text-white text-[10px] font-bold flex items-center gap-1.5 shadow-md">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#9146FF] text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00F593] animate-ping" />
                     <span>NOW PLAYING</span>
                   </div>
                 )}
@@ -355,14 +356,14 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button
                     onClick={() => handlePlayNow(video.id, video.title)}
-                    className="p-3 rounded-full bg-gradient-to-r from-[#FF5E62] to-[#FF9966] text-white shadow-xl hover:scale-110 active:scale-95 transition-all"
+                    className="p-2.5 rounded-full bg-[#9146FF] hover:bg-[#772CE8] text-white shadow-xl hover:scale-110 active:scale-95 transition-all"
                     title={canControl ? 'Play Now' : 'Request Play'}
                   >
                     <Play className="w-5 h-5 fill-current ml-0.5" />
                   </button>
                   <button
                     onClick={() => handleAddToQueue(video.id, video.title)}
-                    className="p-3 rounded-full bg-[#1B1D24] hover:bg-[#242731] text-white border border-white/[0.1] shadow-xl hover:scale-110 active:scale-95 transition-all"
+                    className="p-2.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35] shadow-xl hover:scale-110 active:scale-95 transition-all"
                     title={canControl ? 'Add to Queue' : 'Suggest to Host'}
                   >
                     <Plus className="w-5 h-5" />
@@ -374,16 +375,16 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
               <div className="p-3.5 flex flex-col justify-between flex-1 gap-2.5">
                 <div className="space-y-1">
                   <h4
-                    className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-[#FF9966] transition-colors"
+                    className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-[#BF94FF] transition-colors"
                     title={video.title}
                   >
                     {video.title}
                   </h4>
-                  <div className="flex items-center gap-1 text-[11px] text-zinc-400">
-                    <span className="font-semibold text-zinc-200 truncate max-w-[140px]">{video.channel}</span>
-                    <CheckCircle2 className="w-3 h-3 text-[#2EE59D] shrink-0" />
+                  <div className="flex items-center gap-1 text-[11px] text-[#ADADB8]">
+                    <span className="font-semibold text-[#EFEFF1] truncate max-w-[140px]">{video.channel}</span>
+                    <CheckCircle2 className="w-3 h-3 text-[#ADADB8] shrink-0" />
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono tabular-nums">
+                  <div className="flex items-center gap-2 text-[10px] text-[#71717A] font-mono tabular-nums">
                     <span>{video.views}</span>
                     <span>•</span>
                     <span>{video.uploadedAt}</span>
@@ -391,11 +392,11 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
                 </div>
 
                 {/* Quick Action Footer Buttons */}
-                <div className="flex items-center gap-2 pt-2 border-t border-white/[0.08]">
+                <div className="flex items-center gap-2 pt-2 border-t border-[#2F2F35]/60">
                   <button
                     onClick={() => handlePlayNow(video.id, video.title)}
                     disabled={isCurrentlyPlaying}
-                    className="flex-1 py-1.5 px-2 bg-gradient-to-r from-[#FF5E62]/15 to-[#FF9966]/15 hover:from-[#FF5E62] hover:to-[#FF9966] disabled:opacity-40 text-[#FF9966] hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-all active:scale-[0.98] border border-[#FF5E62]/20"
+                    className="flex-1 py-1.5 px-2 bg-[#9146FF]/20 hover:bg-[#9146FF] disabled:opacity-40 text-[#BF94FF] hover:text-white rounded text-[11px] font-bold flex items-center justify-center gap-1 transition-colors active:scale-[0.98]"
                   >
                     <Play className="w-3 h-3 fill-current" />
                     <span>{isCurrentlyPlaying ? 'Playing' : canControl ? 'Play Now' : 'Request Play'}</span>
@@ -403,7 +404,7 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
 
                   <button
                     onClick={() => handleAddToQueue(video.id, video.title)}
-                    className="py-1.5 px-2.5 bg-[#1B1D24] hover:bg-[#2C303D] text-zinc-300 hover:text-white rounded-xl border border-white/[0.08] text-[11px] font-medium flex items-center gap-1 transition-colors active:scale-[0.98]"
+                    className="py-1.5 px-2 bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white rounded border border-[#2F2F35] text-[11px] font-medium flex items-center gap-1 transition-colors active:scale-[0.98]"
                     title={canControl ? 'Add to Queue' : 'Suggest to Host'}
                   >
                     <Plus className="w-3 h-3" />
@@ -419,13 +420,13 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
       {/* Direct YouTube Link Submission Bar */}
       <form
         onSubmit={handleCustomAdd}
-        className="mt-4 p-4 bg-[#242731] border border-white/[0.08] rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md"
+        className="mt-4 p-3 bg-[#18181B] border border-[#2F2F35] rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <Film className="w-4 h-4 text-[#FF9966] shrink-0" />
+          <Film className="w-4 h-4 text-[#BF94FF] shrink-0" />
           <div>
             <p className="text-xs font-bold text-white">Have another YouTube video in mind?</p>
-            <p className="text-[11px] text-zinc-400">Paste any YouTube URL or video ID to queue or suggest</p>
+            <p className="text-[11px] text-[#ADADB8]">Paste any YouTube URL or video ID to queue or suggest</p>
           </div>
         </div>
 
@@ -435,12 +436,12 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
             placeholder="Paste YouTube link (e.g. https://youtu.be/...)"
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
-            className="flex-1 bg-[#1B1D24] hover:bg-[#2C303D] focus:bg-[#131419] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-colors"
+            className="flex-1 bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
           />
           <button
             type="submit"
             disabled={!customUrl.trim()}
-            className="px-4 py-1.5 bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1 active:scale-[0.98] shadow-md shadow-[#FF5E62]/20"
+            className="px-3.5 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white rounded text-xs font-bold transition-all shrink-0 flex items-center gap-1 active:scale-[0.98]"
           >
             {canControl ? (
               <>

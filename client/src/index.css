@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    background-color: #131419;
+    background-color: #0E0E10;
     color: #EFEFF1;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     min-height: 100vh;
@@ -15,7 +15,7 @@
 
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px #FF5E62;
+    box-shadow: 0 0 0 2px #9146FF;
   }
 }
 
@@ -26,7 +26,7 @@
   font-feature-settings: "tnum";
 }
 
-/* Custom sleek 5px Warm Slate scrollbars */
+/* Custom sleek 5px Twitch scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -37,15 +37,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2C303D;
+  background: #2F2F35;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3B4052;
+  background: #464649;
 }
 
-/* Custom Coral-Sunset scrubber input range */
+/* Custom purple scrubber input range */
 input[type="range"] {
   -webkit-appearance: none;
   background: transparent;
@@ -58,37 +58,31 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 50%;
   background: #FFFFFF;
   cursor: pointer;
-  box-shadow: 0 0 10px rgba(255, 94, 98, 0.9);
-  margin-top: -4.5px;
+  box-shadow: 0 0 8px rgba(145, 70, 255, 0.9);
+  margin-top: -5px;
   transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.3);
-  background: #FFF1F0;
+  background: #BF94FF;
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
-  height: 5px;
+  height: 4px;
   cursor: pointer;
-  background: #242731;
-  border-radius: 9999px;
+  background: #2F2F35;
+  border-radius: 2px;
 }
 
-/* Warm Coral-Amber Glow effects */
-.coral-glow {
-  box-shadow: 0 0 20px rgba(255, 94, 98, 0.3);
+/* Glow effects */
+.twitch-glow {
+  box-shadow: 0 0 15px rgba(145, 70, 255, 0.25);
 }
 
-.coral-glow-subtle {
-  box-shadow: 0 0 40px rgba(255, 94, 98, 0.15);
-}
-
-.surface-card {
-  background-color: #1B1D24;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+.twitch-glow-subtle {
+  box-shadow: 0 0 30px rgba(145, 70, 255, 0.12);
 }
 
 /* Floating Emoji Reaction Animation */
