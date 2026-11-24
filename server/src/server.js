@@ -37,6 +37,20 @@ export function createServer() {
     });
   });
 
+  // Active public rooms discovery endpoint
+  app.get('/api/rooms', (req, res) => {
+    const list = Array.from(roomManager.rooms.values())
+      .filter((r) => !r.isLocked)
+      .map((r) => ({
+        roomId: r.roomId,
+        videoTitle: r.videoTitle,
+        videoId: r.videoId,
+        viewers: r.participants.size,
+        playState: r.playState,
+      }));
+    res.json({ rooms: list });
+  });
+
   // Attach WebSocket handler
   const wsHandler = new WebSocketHandler(io);
   io.on('connection', (socket) => {

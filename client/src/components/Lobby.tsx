@@ -77,43 +77,45 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
       title: 'GTA VI Trailer Reveal & Breakdown',
       creator: 'Sajid (Host)',
       viewers: '1.7K',
-      thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
-      duration: '25m',
+      thumbnail: 'https://img.youtube.com/vi/QdBZY2fkU-0/mqdefault.jpg',
+      duration: '01:31',
     },
     {
       id: 'LOFIPY',
       title: 'Lofi Hip Hop Radio — Beats to Relax/Study',
-      creator: 'Alex',
+      creator: 'Alex (Host)',
       viewers: '3.2K',
-      thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+      thumbnail: 'https://img.youtube.com/vi/jfKfPfyJRdk/mqdefault.jpg',
       duration: 'LIVE',
     },
     {
       id: 'CYBER9',
       title: 'Cyberpunk 2077 Night City Walkthrough',
-      creator: 'Jordan',
+      creator: 'Jordan (Host)',
       viewers: '850',
-      thumbnail: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80',
-      duration: '1h 12m',
+      thumbnail: 'https://img.youtube.com/vi/eaW0t48HGHM/mqdefault.jpg',
+      duration: '03:45',
     },
     {
       id: 'WEB3AI',
       title: 'Next-Gen Web3 & AI Keynote Livestream',
-      creator: 'Elena',
+      creator: 'Elena (Host)',
       viewers: '2.4K',
-      thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80',
-      duration: '45m',
+      thumbnail: 'https://img.youtube.com/vi/M7lc1UVf-VE/mqdefault.jpg',
+      duration: '33:10',
     },
   ];
 
   const handleSelectSample = (sampleCode: string) => {
     setRoomCode(sampleCode);
-    if (username.trim()) {
-      setIsSubmitting(true);
-      onJoin(username.trim(), sampleCode);
-    } else {
-      setError('Enter your display name above to join this party');
+    const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+    if (!username.trim()) {
+      setUsername(chosenName);
+      localStorage.setItem('watchsync_username', chosenName);
     }
+    setError('');
+    setIsSubmitting(true);
+    onJoin(chosenName, sampleCode);
   };
 
   return (

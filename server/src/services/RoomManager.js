@@ -1,5 +1,29 @@
 import crypto from 'crypto';
 import { Room } from '../models/Room.js';
+import { Participant } from '../models/Participant.js';
+
+export const DEMO_ROOMS = {
+  GTAVIP: {
+    videoId: 'QdBZY2fkU-0',
+    host: 'Sajid',
+    title: 'Grand Theft Auto VI Trailer 1',
+  },
+  LOFIPY: {
+    videoId: 'jfKfPfyJRdk',
+    host: 'Alex',
+    title: 'lofi hip hop radio 📚 beats to relax/study to',
+  },
+  CYBER9: {
+    videoId: 'eaW0t48HGHM',
+    host: 'Jordan',
+    title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Trailer',
+  },
+  WEB3AI: {
+    videoId: 'M7lc1UVf-VE',
+    host: 'Elena',
+    title: 'YouTube Developers Live: Embedded Web Player Customization',
+  },
+};
 
 /**
  * Service managing rooms in memory with auto code generation and cleanup.
@@ -8,6 +32,38 @@ export class RoomManager {
   constructor() {
     /** @type {Map<string, Room>} */
     this.rooms = new Map();
+    this.seedDemoRooms();
+  }
+
+  seedDemoRoom(code) {
+    const info = DEMO_ROOMS[code];
+    if (!info) return undefined;
+
+    const hostParticipant = new Participant({
+      userId: `demo_host_${code.toLowerCase()}`,
+      socketId: `socket_${code.toLowerCase()}`,
+      username: `${info.host} (Host)`,
+      role: 'host',
+    });
+
+    const room = new Room({ roomId: code, initialVideoId: info.videoId });
+    room.videoTitle = info.title;
+    room.playState = 'playing';
+    room.currentTime = 15;
+    room.lastUpdatedAt = Date.now();
+    room.isOpenControl = true; // Open controls enabled so demo guests can play/pause/seek freely
+    room.addParticipant(hostParticipant);
+
+    this.rooms.set(code, room);
+    return room;
+  }
+
+  seedDemoRooms() {
+    for (const code of Object.keys(DEMO_ROOMS)) {
+      if (!this.rooms.has(code)) {
+        this.seedDemoRoom(code);
+      }
+    }
   }
 
   /**
@@ -60,13 +116,17 @@ export class RoomManager {
   }
 
   /**
-   * Get an existing room by ID.
+   * Get an existing room by ID. Auto-seeds demo rooms if requested.
    * @param {string} roomId
    * @returns {Room | undefined}
    */
   getRoom(roomId) {
     if (!roomId) return undefined;
-    return this.rooms.get(String(roomId).trim().toUpperCase());
+    const cleanId = String(roomId).trim().toUpperCase();
+    if (!this.rooms.has(cleanId) && DEMO_ROOMS[cleanId]) {
+      return this.seedDemoRoom(cleanId);
+    }
+    return this.rooms.get(cleanId);
   }
 
   /**
@@ -94,9 +154,14 @@ export class RoomManager {
 
   /**
    * Cleans up empty room if it has 0 participants.
+   * Preserves demo curated parties so visitors can always explore them.
    * @param {string} roomId
    */
   cleanupIfEmpty(roomId) {
+    if (!roomId) return false;
+    const cleanId = String(roomId).trim().toUpperCase();
+    if (DEMO_ROOMS[cleanId]) return false;
+
     const room = this.getRoom(roomId);
     if (room && room.isEmpty()) {
       this.rooms.delete(room.roomId);
