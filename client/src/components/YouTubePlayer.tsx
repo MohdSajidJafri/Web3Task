@@ -20,10 +20,19 @@ import {
   Unlock,
   Sliders,
   ShieldCheck,
-  Tv
+  Tv,
+  ThumbsUp,
+  ThumbsDown,
+  Bell,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Gauge
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
+import { RecommendedVideos } from './RecommendedVideos';
 
 interface YouTubePlayerProps {
   roomId: string;
@@ -82,9 +91,63 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [inlineVideoUrl, setInlineVideoUrl] = useState<string>('');
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isLiked, setIsLiked] = useState<boolean>(false);
+  const [isDisliked, setIsDisliked] = useState<boolean>(false);
+  const [likeCount, setLikeCount] = useState<number>(142850);
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState<boolean>(false);
+  const [autoplayNext, setAutoplayNext] = useState<boolean>(true);
 
   const socket = getSocket();
   const isHost = role === 'host';
+
+  const handleToggleLike = () => {
+    if (isLiked) {
+      setIsLiked(false);
+      setLikeCount((prev) => prev - 1);
+    } else {
+      setIsLiked(true);
+      setLikeCount((prev) => prev + 1);
+      if (isDisliked) setIsDisliked(false);
+      onNotification?.('Added to your Liked videos', 'success');
+    }
+  };
+
+  const handleToggleDislike = () => {
+    if (isDisliked) {
+      setIsDisliked(false);
+    } else {
+      setIsDisliked(true);
+      if (isLiked) {
+        setIsLiked(false);
+        setLikeCount((prev) => prev - 1);
+      }
+    }
+  };
+
+  const handleToggleSubscribe = () => {
+    setIsSubscribed((prev) => {
+      const next = !prev;
+      onNotification?.(next ? 'Subscribed to channel with notifications on! 🔔' : 'Unsubscribed from channel', 'info');
+      return next;
+    });
+  };
+
+  const handleCycleSpeed = () => {
+    const rates = [0.75, 1, 1.25, 1.5, 2];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextRate = rates[(currentIndex + 1) % rates.length];
+    setPlaybackRate(nextRate);
+    if (playerRef.current && playerRef.current.setPlaybackRate) {
+      try {
+        playerRef.current.setPlaybackRate(nextRate);
+      } catch (err) {
+        console.error('Speed change error:', err);
+      }
+    }
+    onNotification?.(`Playback speed set to ${nextRate}x`, 'info');
+  };
 
   // Safely execute a programmatic update to the YT Player
   const executeProgrammaticUpdate = useCallback((updateFn: (player: any) => void) => {
@@ -581,6 +644,16 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <span>{pingMs}ms</span>
             </div>
 
+            {/* Playback Speed Selector */}
+            <button
+              onClick={handleCycleSpeed}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] hover:text-[#9146FF] text-[#ADADB8] border border-[#2F2F35] text-[11px] font-mono font-bold transition-colors tabular-nums"
+              title="Playback speed (click to cycle: 0.75x, 1x, 1.25x, 1.5x, 2x)"
+            >
+              <Gauge className="w-3.5 h-3.5" />
+              <span>{playbackRate}x</span>
+            </button>
+
             <button
               onClick={handleManualResync}
               className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35] text-[11px] font-medium transition-colors"
@@ -601,12 +674,23 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         </div>
       </div>
 
-      {/* 3. Twitch Streamer Info Header (below control bar) */}
+      {/* 3. YouTube Video Title, Channel & Engagement Actions */}
       <div className="px-4 py-4 sm:px-6 bg-[#0E0E10] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Host & Title */}
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="relative shrink-0 mt-0.5">
+        {/* Video Title */}
+        <div className="space-y-1">
+          <h2
+            className="text-base sm:text-lg font-black text-white tracking-tight leading-snug line-clamp-2"
+            title={syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
+          >
+            {syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
+          </h2>
+        </div>
+
+        {/* Channel Row & Engagement Actions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 border-b border-[#2F2F35]/80 pb-4">
+          {/* Left: Channel Info, Host and Subscribe */}
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-md ring-2 ring-[#9146FF] ring-offset-2 ring-offset-[#0E0E10]"
                 style={{ backgroundColor: hostColor }}
@@ -619,50 +703,86 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             </div>
 
             <div className="min-w-0">
-              <h2
-                className="text-sm sm:text-base font-bold text-white tracking-tight line-clamp-1"
-                title={syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
-              >
-                {syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}
-              </h2>
-              <div className="flex items-center gap-2 text-xs text-[#ADADB8] pt-0.5 flex-wrap">
-                <span>Hosted by <span className="font-semibold text-white">{hostName || 'Host'}</span></span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm text-white truncate max-w-[160px]">{hostName || 'Host'}</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#BF94FF] shrink-0" />
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[#ADADB8]">
+                <span className="font-mono tabular-nums text-[#00F593]">👥 {viewerCount} in party</span>
                 <span>•</span>
-                <span className="text-[#00F593] flex items-center gap-1 font-mono tabular-nums">
-                  👥 {viewerCount} watching
-                </span>
-
-                {/* Status Badges for Lock & Open Controls */}
-                {isLocked && (
-                  <span
-                    className="px-1.5 py-0.2 rounded bg-[#EB0400]/20 border border-[#EB0400]/40 text-[#FF4A4A] text-[10px] font-bold flex items-center gap-1"
-                    title="Room is locked by host"
-                  >
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>LOCKED</span>
-                  </span>
-                )}
-                {isOpenControl && (
-                  <span
-                    className="px-1.5 py-0.2 rounded bg-[#00F593]/20 border border-[#00F593]/40 text-[#00F593] text-[10px] font-bold flex items-center gap-1"
-                    title="Open-Party Mode: All participants can control playback"
-                  >
-                    <Sliders className="w-2.5 h-2.5" />
-                    <span>OPEN CONTROLS</span>
-                  </span>
-                )}
+                <span>2.48M subscribers</span>
               </div>
             </div>
+
+            {/* Subscribe Button */}
+            <button
+              onClick={handleToggleSubscribe}
+              className={`ml-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
+                isSubscribed
+                  ? 'bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35]'
+                  : 'bg-white hover:bg-[#EFEFF1] text-black shadow-md'
+              }`}
+            >
+              {isSubscribed ? (
+                <>
+                  <Bell className="w-3.5 h-3.5 text-[#00F593]" />
+                  <span>Subscribed</span>
+                </>
+              ) : (
+                <span>Subscribe</span>
+              )}
+            </button>
           </div>
 
-          {/* Right Action Buttons: Host Settings Toggles & Share */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* Right: Likes, Share, Autoplay, Host Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Like / Dislike Pill */}
+            <div className="flex items-center bg-[#1F1F23] border border-[#2F2F35] rounded-full overflow-hidden text-xs">
+              <button
+                onClick={handleToggleLike}
+                className={`flex items-center gap-1.5 px-3 py-1.5 hover:bg-[#26262C] transition-colors ${
+                  isLiked ? 'text-[#9146FF] font-bold' : 'text-white'
+                }`}
+                title="I like this"
+              >
+                <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                <span className="font-mono tabular-nums text-[11px]">{likeCount.toLocaleString()}</span>
+              </button>
+              <div className="w-[1px] h-4 bg-[#2F2F35]" />
+              <button
+                onClick={handleToggleDislike}
+                className={`p-1.5 px-2.5 hover:bg-[#26262C] transition-colors ${
+                  isDisliked ? 'text-[#FF4A4A]' : 'text-[#ADADB8] hover:text-white'
+                }`}
+                title="I dislike this"
+              >
+                <ThumbsDown className={`w-3.5 h-3.5 ${isDisliked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {/* Autoplay Toggle */}
+            <button
+              onClick={() => {
+                setAutoplayNext(!autoplayNext);
+                onNotification?.(autoplayNext ? 'Autoplay is turned off' : 'Autoplay is turned on', 'info');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                autoplayNext
+                  ? 'bg-[#9146FF]/20 border-[#9146FF]/50 text-[#BF94FF]'
+                  : 'bg-[#1F1F23] border-[#2F2F35] text-[#ADADB8]'
+              }`}
+              title="Auto-play next video when current video ends"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span className="text-[11px]">Autoplay: {autoplayNext ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Host Controls */}
             {isHost && (
               <>
-                {/* Lock Room Toggle */}
                 <button
                   onClick={handleToggleLock}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-all active:scale-[0.98] ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
                     isLocked
                       ? 'bg-[#EB0400]/20 border-[#EB0400] text-[#FF4A4A]'
                       : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
@@ -673,10 +793,9 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                   <span>{isLocked ? 'Locked' : 'Lock Room'}</span>
                 </button>
 
-                {/* Open Controls Toggle */}
                 <button
                   onClick={handleToggleOpenControls}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-all active:scale-[0.98] ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
                     isOpenControl
                       ? 'bg-[#00F593]/20 border-[#00F593] text-[#00F593]'
                       : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
@@ -689,17 +808,55 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               </>
             )}
 
+            {/* Share Invite */}
             <button
               onClick={copyShareInvite}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] text-xs font-semibold text-white transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] text-xs font-semibold text-white transition-all shadow-sm"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
+              <span>{copied ? 'Copied' : 'Share'}</span>
             </button>
           </div>
         </div>
 
-        {/* 4. Quick Inline Change Video Bar */}
+        {/* Collapsible YouTube Description Box */}
+        <div
+          onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+          className="bg-[#18181B] hover:bg-[#1F1F23] border border-[#2F2F35] rounded-xl p-3.5 text-xs text-[#EFEFF1] cursor-pointer transition-colors space-y-2 select-none"
+        >
+          <div className="flex items-center gap-2 font-bold font-mono text-[11px] text-[#ADADB8] flex-wrap">
+            <span className="text-white">1,482,903 views</span>
+            <span>•</span>
+            <span>Streamed live in Watch Party</span>
+            <span>•</span>
+            <span className="text-[#9146FF]">#WatchParty</span>
+            <span className="text-[#9146FF]">#YouTubeTheater</span>
+            <span className="text-[#9146FF]">#SyncParty</span>
+          </div>
+
+          <p className={`text-xs text-[#ADADB8] leading-relaxed ${isDescriptionExpanded ? '' : 'line-clamp-2'}`}>
+            Welcome to the official real-time synchronized YouTube Watch Party! Everyone in this room experiences 100% frame-accurate playback, shared queue management, instant reactions, and low-latency party chat. Host: <span className="text-white font-semibold">{hostName}</span> • Party Code: <span className="font-mono font-bold text-white">{roomId}</span>.
+          </p>
+
+          <button
+            type="button"
+            className="font-bold text-white text-[11px] hover:text-[#BF94FF] flex items-center gap-1 pt-0.5"
+          >
+            {isDescriptionExpanded ? (
+              <>
+                <span>Show less</span>
+                <ChevronUp className="w-3.5 h-3.5" />
+              </>
+            ) : (
+              <>
+                <span>...more</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Quick Inline Change Video Bar */}
         <form onSubmit={handleInlineVideoSubmit} className="flex items-center gap-2">
           <div className="relative flex-1">
             <Film className="w-4 h-4 text-[#ADADB8] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -734,6 +891,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             )}
           </button>
         </form>
+
+        {/* 5. Recommended / Suggested Videos Shelf */}
+        <RecommendedVideos
+          roomId={roomId}
+          canControl={canControl}
+          currentUserRole={role}
+          currentVideoId={currentVideoId}
+          onNotification={onNotification}
+        />
       </div>
     </div>
   );
