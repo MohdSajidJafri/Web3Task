@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Crown, Shield, User, Search, Bell, LayoutGrid, Film, Send } from 'lucide-react';
+import { Copy, Check, LogOut, Crown, Shield, User, Search, Film, Send } from 'lucide-react';
 import { Role } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
@@ -167,16 +167,8 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         )}
       </div>
 
-      {/* Right: Icons, Role Badge, Avatar & Leave Room */}
+      {/* Right: Role Badge, Avatar & Leave Room */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <button className="p-1.5 text-[#ADADB8] hover:text-white hover:bg-[#1F1F23] rounded transition-colors hidden lg:block">
-          <LayoutGrid className="w-4 h-4" />
-        </button>
-        <button className="p-1.5 text-[#ADADB8] hover:text-white hover:bg-[#1F1F23] rounded transition-colors relative hidden sm:block">
-          <Bell className="w-4 h-4" />
-          <span className="w-1.5 h-1.5 bg-[#EB0400] rounded-full absolute top-1 right-1"></span>
-        </button>
-
         {inRoom && renderRoleBadge()}
 
         {/* User Avatar with online dot */}
