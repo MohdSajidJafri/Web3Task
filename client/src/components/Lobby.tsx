@@ -1,5 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Tv, Sparkles, LogIn, Users, Flame, Radio, Play, Shield, Globe, Lock, Loader2, Command } from 'lucide-react';
+import {
+  Tv,
+  Sparkles,
+  LogIn,
+  Users,
+  Flame,
+  Radio,
+  Play,
+  Shield,
+  Globe,
+  Lock,
+  Loader2,
+  Command,
+  Clock,
+  Trash2,
+  RotateCcw
+} from 'lucide-react';
+import { getWatchHistory, clearWatchHistory, formatTimeAgo, HistoryItem } from '../utils/history';
 
 interface LobbyProps {
   onJoin: (username: string, roomId?: string, initialVideoId?: string) => void;
@@ -17,6 +34,23 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverOnline, setServerOnline] = useState(true);
   const [error, setError] = useState('');
+  const [watchHistory, setWatchHistory] = useState<HistoryItem[]>(() => getWatchHistory());
+
+  const handleClearHistory = () => {
+    clearWatchHistory();
+    setWatchHistory([]);
+  };
+
+  const handleWatchFromHistory = (item: HistoryItem) => {
+    setSelectedPresetId(item.videoId);
+    const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+    if (!username.trim()) {
+      setUsername(chosenName);
+      localStorage.setItem('watchsync_username', chosenName);
+    }
+    setIsSubmitting(true);
+    onJoin(chosenName, undefined, item.videoId);
+  };
 
   // Check server health on mount
   useEffect(() => {
@@ -396,6 +430,61 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
             ))}
           </div>
         </div>
+
+        {/* Shelf: Recently Watched & History */}
+        {watchHistory.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-[#00F593]" />
+                <span>Recently Watched & History</span>
+              </h3>
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="text-[11px] text-[#ADADB8] hover:text-[#EB0400] flex items-center gap-1 transition-colors"
+                title="Clear your watch history"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear History</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {watchHistory.slice(0, 6).map((item) => (
+                <div
+                  key={item.videoId}
+                  onClick={() => handleWatchFromHistory(item)}
+                  className="group cursor-pointer bg-[#18181B] border border-[#2F2F35] hover:border-[#9146FF] rounded-lg overflow-hidden transition-all duration-150 hover:-translate-y-0.5 shadow-lg flex items-center gap-3 p-2"
+                >
+                  {/* Thumbnail */}
+                  <div className="relative aspect-video w-28 bg-black rounded overflow-hidden shrink-0">
+                    <img
+                      src={item.thumbnail || `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play className="w-4 h-4 text-white fill-current" />
+                    </div>
+                  </div>
+
+                  {/* Info */}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h4 className="text-xs font-bold text-white line-clamp-1 group-hover:text-[#BF94FF] transition-colors" title={item.title}>
+                      {item.title}
+                    </h4>
+                    <p className="text-[11px] text-[#ADADB8] truncate">{item.channel || 'Watch Party'}</p>
+                    <div className="flex items-center justify-between text-[10px] text-[#71717A] pt-0.5">
+                      <span>{formatTimeAgo(item.watchedAt)}</span>
+                      <span className="text-[#9146FF] font-semibold group-hover:underline">Start Party →</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Keyboard Shortcut Hints Strip at Bottom */}

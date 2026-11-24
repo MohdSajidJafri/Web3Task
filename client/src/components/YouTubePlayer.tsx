@@ -28,11 +28,16 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  Gauge
+  Gauge,
+  Settings,
+  Subtitles,
+  Repeat
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
 import { RecommendedVideos } from './RecommendedVideos';
+import { PlayerSettingsMenu } from './PlayerSettingsMenu';
+import { addToWatchHistory } from '../utils/history';
 
 interface YouTubePlayerProps {
   roomId: string;
@@ -147,6 +152,51 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       }
     }
     onNotification?.(`Playback speed set to ${nextRate}x`, 'info');
+  };
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [quality, setQuality] = useState<string>('auto');
+  const [captions, setCaptions] = useState<string>('off');
+  const [ambientMode, setAmbientMode] = useState<boolean>(true);
+  const [loopVideo, setLoopVideo] = useState<boolean>(false);
+
+  // Track video in watch history whenever current video changes
+  useEffect(() => {
+    if (syncState?.videoId) {
+      addToWatchHistory({
+        videoId: syncState.videoId,
+        title: syncState.videoTitle || `YouTube Video (${syncState.videoId})`,
+        channel: hostName,
+      });
+    }
+  }, [syncState?.videoId, syncState?.videoTitle, hostName]);
+
+  const handleToggleCaptions = () => {
+    const nextCaptions = captions === 'off' ? 'en' : 'off';
+    setCaptions(nextCaptions);
+    try {
+      if (playerRef.current) {
+        if (nextCaptions !== 'off') {
+          if (playerRef.current.loadModule) playerRef.current.loadModule('captions');
+          if (playerRef.current.setOption) {
+            playerRef.current.setOption('captions', 'track', { languageCode: nextCaptions });
+          }
+        } else {
+          if (playerRef.current.unloadModule) playerRef.current.unloadModule('captions');
+        }
+      }
+    } catch (e) {}
+    onNotification?.(nextCaptions === 'off' ? 'Subtitles turned off' : 'Subtitles turned on (English)', 'info');
+  };
+
+  const handleSelectQuality = (newQuality: string) => {
+    setQuality(newQuality);
+    try {
+      if (playerRef.current && playerRef.current.setPlaybackQuality) {
+        playerRef.current.setPlaybackQuality(newQuality);
+      }
+    } catch (e) {}
+    onNotification?.(`Playback quality set to ${newQuality === 'auto' ? 'Auto (1080p)' : newQuality}`, 'info');
   };
 
   // Safely execute a programmatic update to the YT Player
@@ -500,6 +550,11 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     <div ref={containerRef} className="flex flex-col w-full bg-[#0E0E10] text-[#EFEFF1]">
       {/* 1. 16:9 Black Video Theater Stage */}
       <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden shadow-2xl">
+        {/* YouTube Ambient Mode Glow */}
+        {ambientMode && (
+          <div className="absolute -inset-4 bg-gradient-to-tr from-[#9146FF]/25 via-[#BF94FF]/10 to-transparent blur-3xl -z-10 rounded-2xl pointer-events-none transition-opacity duration-500" />
+        )}
+
         <div id="youtube-player-element" className="w-full h-full pointer-events-none" />
 
         {/* Floating Live Emoji Reactions Overlay */}
@@ -644,15 +699,63 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <span>{pingMs}ms</span>
             </div>
 
-            {/* Playback Speed Selector */}
+            {/* Subtitles / Closed Captions [CC] Button */}
             <button
-              onClick={handleCycleSpeed}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] hover:text-[#9146FF] text-[#ADADB8] border border-[#2F2F35] text-[11px] font-mono font-bold transition-colors tabular-nums"
-              title="Playback speed (click to cycle: 0.75x, 1x, 1.25x, 1.5x, 2x)"
+              onClick={handleToggleCaptions}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono border transition-all ${
+                captions !== 'off'
+                  ? 'bg-[#9146FF]/30 border-[#9146FF] text-[#BF94FF]'
+                  : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+              }`}
+              title={captions !== 'off' ? 'Turn off Subtitles (c)' : 'Turn on Subtitles (c)'}
             >
-              <Gauge className="w-3.5 h-3.5" />
-              <span>{playbackRate}x</span>
+              CC
             </button>
+
+            {/* Settings Gear Popover Button */}
+            <div className="relative">
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isSettingsOpen
+                    ? 'bg-[#26262C] text-[#9146FF]'
+                    : 'text-[#ADADB8] hover:text-white hover:bg-[#1F1F23]'
+                }`}
+                title="Settings (Speed, Quality, Captions, Ambient, Loop)"
+              >
+                <Settings className={`w-4 h-4 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90 text-[#9146FF]' : ''}`} />
+              </button>
+
+              <PlayerSettingsMenu
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                playbackRate={playbackRate}
+                onSelectSpeed={(speed) => {
+                  setPlaybackRate(speed);
+                  try {
+                    playerRef.current?.setPlaybackRate(speed);
+                  } catch (e) {}
+                  onNotification?.(`Playback speed set to ${speed}x`, 'info');
+                }}
+                quality={quality}
+                onSelectQuality={handleSelectQuality}
+                captions={captions}
+                onSelectCaptions={(cap) => {
+                  setCaptions(cap);
+                  onNotification?.(cap === 'off' ? 'Subtitles turned off' : `Subtitles set to ${cap.toUpperCase()}`, 'info');
+                }}
+                ambientMode={ambientMode}
+                onToggleAmbient={() => {
+                  setAmbientMode(!ambientMode);
+                  onNotification?.(ambientMode ? 'Ambient mode disabled' : 'Ambient mode enabled', 'info');
+                }}
+                loop={loopVideo}
+                onToggleLoop={() => {
+                  setLoopVideo(!loopVideo);
+                  onNotification?.(loopVideo ? 'Video loop disabled' : 'Video loop enabled', 'info');
+                }}
+              />
+            </div>
 
             <button
               onClick={handleManualResync}
