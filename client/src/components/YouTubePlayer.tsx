@@ -807,32 +807,35 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-sm text-white truncate max-w-[160px]">{hostName || 'Host'}</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#BF94FF] shrink-0" />
+                <span className="font-bold text-sm text-[#EFEFF1] truncate max-w-[160px]">{hostName || 'Host'}</span>
+                <svg className="w-4 h-4 text-[#9146FF] fill-current shrink-0" viewBox="0 0 20 20" aria-label="Verified Streamer">
+                  <title>Verified Streamer</title>
+                  <path fillRule="evenodd" d="M10 1l2.5 1.5L15 2l1.5 2.5L19 5l-.5 3 2 2.5-2 2.5.5 3-2.5.5L15 18l-2.5-.5L10 19l-2.5-1.5L5 18l-1.5-2.5L1 15l.5-3L-.5 9.5l2-2.5-.5-3L3.5 4 5 1.5 7.5 2 10 1zm-1 12.5l5.5-5.5-1.5-1.5L9 10.5 7 8.5 5.5 10l3.5 3.5z" clipRule="evenodd" />
+                </svg>
               </div>
               <div className="flex items-center gap-2 text-xs text-[#ADADB8]">
                 <span className="font-mono tabular-nums text-[#00F593]">👥 {viewerCount} in party</span>
                 <span>•</span>
-                <span>2.48M subscribers</span>
+                <span>2.48M followers</span>
               </div>
             </div>
 
-            {/* Subscribe Button */}
+            {/* Subscribe / Follow Button */}
             <button
               onClick={handleToggleSubscribe}
-              className={`ml-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
+              className={`ml-2 h-[30px] px-3.5 rounded-[4px] text-xs font-semibold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
                 isSubscribed
-                  ? 'bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35]'
-                  : 'bg-white hover:bg-[#EFEFF1] text-black shadow-md'
+                  ? 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#EFEFF1]'
+                  : 'bg-[#9146FF] hover:bg-[#772CE8] text-white shadow-sm'
               }`}
             >
               {isSubscribed ? (
                 <>
                   <Bell className="w-3.5 h-3.5 text-[#00F593]" />
-                  <span>Subscribed</span>
+                  <span>Following</span>
                 </>
               ) : (
-                <span>Subscribe</span>
+                <span>Follow</span>
               )}
             </button>
           </div>
@@ -840,22 +843,22 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           {/* Right: Likes, Share, Autoplay, Host Controls */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Like / Dislike Pill */}
-            <div className="flex items-center bg-[#1F1F23] border border-[#2F2F35] rounded-full overflow-hidden text-xs">
+            <div className="flex items-center bg-[#2F2F35] rounded-[4px] overflow-hidden text-xs h-[30px]">
               <button
                 onClick={handleToggleLike}
-                className={`flex items-center gap-1.5 px-3 py-1.5 hover:bg-[#26262C] transition-colors ${
-                  isLiked ? 'text-[#9146FF] font-bold' : 'text-white'
+                className={`flex items-center gap-1.5 px-3 h-full hover:bg-[#3A3A42] transition-colors ${
+                  isLiked ? 'text-[#BF94FF] font-bold' : 'text-[#EFEFF1]'
                 }`}
                 title="I like this"
               >
                 <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
                 <span className="font-mono tabular-nums text-[11px]">{likeCount.toLocaleString()}</span>
               </button>
-              <div className="w-[1px] h-4 bg-[#2F2F35]" />
+              <div className="w-[1px] h-4 bg-[#1F1F23]" />
               <button
                 onClick={handleToggleDislike}
-                className={`p-1.5 px-2.5 hover:bg-[#26262C] transition-colors ${
-                  isDisliked ? 'text-[#FF4A4A]' : 'text-[#ADADB8] hover:text-white'
+                className={`px-2.5 h-full flex items-center hover:bg-[#3A3A42] transition-colors ${
+                  isDisliked ? 'text-[#EB0400]' : 'text-[#ADADB8] hover:text-[#EFEFF1]'
                 }`}
                 title="I dislike this"
               >
@@ -869,14 +872,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 setAutoplayNext(!autoplayNext);
                 onNotification?.(autoplayNext ? 'Autoplay is turned off' : 'Autoplay is turned on', 'info');
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] text-xs font-semibold transition-all ${
                 autoplayNext
-                  ? 'bg-[#9146FF]/20 border-[#9146FF]/50 text-[#BF94FF]'
-                  : 'bg-[#1F1F23] border-[#2F2F35] text-[#ADADB8]'
+                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
+                  : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#ADADB8] hover:text-[#EFEFF1]'
               }`}
               title="Auto-play next video when current video ends"
             >
-              <Sparkles className="w-3 h-3" />
+              <Sparkles className="w-3.5 h-3.5" />
               <span className="text-[11px]">Autoplay: {autoplayNext ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -885,10 +888,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <>
                 <button
                   onClick={handleToggleLock}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
+                  className={`flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] text-xs font-semibold transition-all active:scale-[0.98] ${
                     isLocked
-                      ? 'bg-[#EB0400]/20 border-[#EB0400] text-[#FF4A4A]'
-                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                      ? 'bg-[#EB0400]/20 border border-[#EB0400] text-[#EB0400]'
+                      : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#ADADB8] hover:text-[#EFEFF1]'
                   }`}
                   title={isLocked ? 'Room is locked to new joiners. Click to unlock.' : 'Click to lock room from new joiners'}
                 >
@@ -898,10 +901,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
                 <button
                   onClick={handleToggleOpenControls}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-[0.98] ${
+                  className={`flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] text-xs font-semibold transition-all active:scale-[0.98] ${
                     isOpenControl
-                      ? 'bg-[#00F593]/20 border-[#00F593] text-[#00F593]'
-                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                      ? 'bg-[#00F593]/20 border border-[#00F593] text-[#00F593]'
+                      : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#ADADB8] hover:text-[#EFEFF1]'
                   }`}
                   title={isOpenControl ? 'All members can control playback. Click to restrict.' : 'Click to allow all participants to control video'}
                 >
@@ -914,7 +917,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             {/* Share Invite */}
             <button
               onClick={copyShareInvite}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] text-xs font-semibold text-white transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] bg-[#2F2F35] hover:bg-[#3A3A42] active:scale-[0.98] text-xs font-semibold text-[#EFEFF1] transition-all shadow-sm"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied' : 'Share'}</span>

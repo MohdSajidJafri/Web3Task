@@ -85,6 +85,32 @@ input[type="range"]::-webkit-slider-runnable-track {
   box-shadow: 0 0 30px rgba(145, 70, 255, 0.12);
 }
 
+/* Iconic Twitch Card Accent Hover Shift */
+.twitch-card-container {
+  position: relative;
+  background-color: transparent;
+}
+.twitch-card-container:hover .twitch-card-thumb {
+  transform: translate(6px, -6px);
+}
+.twitch-card-container:hover .twitch-card-backdrop {
+  opacity: 1;
+}
+.twitch-card-thumb {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 2;
+}
+.twitch-card-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: #9146FF;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
 /* Floating Emoji Reaction Animation */
 @keyframes floatUpAndFade {
   0% {

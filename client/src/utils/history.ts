@@ -15,7 +15,7 @@ export const DEFAULT_HISTORY_ITEMS: HistoryItem[] = [
     videoId: 'QdBZY2fkU-0',
     title: 'Grand Theft Auto VI Trailer 1',
     channel: 'Rockstar Games',
-    thumbnail: 'https://img.youtube.com/vi/QdBZY2fkU-0/mqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/QdBZY2fkU-0/hqdefault.jpg',
     watchedAt: Date.now() - 1000 * 60 * 25, // 25 mins ago
     duration: '01:31',
   },
@@ -23,7 +23,7 @@ export const DEFAULT_HISTORY_ITEMS: HistoryItem[] = [
     videoId: '5qap5aO4i9A',
     title: 'lofi hip hop radio 📚 beats to relax/study to',
     channel: 'Lofi Girl',
-    thumbnail: 'https://img.youtube.com/vi/5qap5aO4i9A/mqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg',
     watchedAt: Date.now() - 1000 * 60 * 120, // 2 hours ago
     duration: 'LIVE',
   },
@@ -31,7 +31,7 @@ export const DEFAULT_HISTORY_ITEMS: HistoryItem[] = [
     videoId: 'LXb3EKWsInQ',
     title: 'COSTA RICA IN 4K 60fps HDR (ULTRA HD)',
     channel: 'Jacob + Katie Schwarz',
-    thumbnail: 'https://img.youtube.com/vi/LXb3EKWsInQ/mqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/LXb3EKWsInQ/hqdefault.jpg',
     watchedAt: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
     duration: '05:15',
   },

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Crown, Shield, User, Search, Film, Send, HelpCircle } from 'lucide-react';
+import { Copy, Check, LogOut, Crown, Shield, User, Search, Film, Send, HelpCircle, Compass, Bell, MessageSquare, Diamond } from 'lucide-react';
 import { Role } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
@@ -47,7 +47,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
     if (canControl) {
       socket.emit('change_video', { roomId, videoId: videoInput.trim() });
       setVideoInput('');
-      onNotification?.('Updating video...', 'info');
+      onNotification?.('Loading video into party...', 'info');
     } else {
       socket.emit('request_control', {
         roomId,
@@ -64,21 +64,21 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
     switch (userRole) {
       case 'host':
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-[#9146FF] text-white">
-            <Crown className="w-3 h-3 text-[#FFD700]" />
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-bold bg-[#9146FF] text-white shadow-sm">
+            <Crown className="w-3 h-3 text-[#FFD700] fill-current" />
             <span>HOST</span>
           </span>
         );
       case 'moderator':
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-[#00AD03] text-white">
-            <Shield className="w-3 h-3 text-white" />
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-bold bg-[#00AD03] text-white shadow-sm">
+            <Shield className="w-3 h-3 text-white fill-current" />
             <span>MOD</span>
           </span>
         );
       default:
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#2F2F35] text-[#ADADB8]">
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-medium bg-[#2F2F35] text-[#ADADB8]">
             <User className="w-3 h-3" />
             <span>VIEWER</span>
           </span>
@@ -89,13 +89,13 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   const userColor = getTwitchUserColor(username || 'User');
 
   return (
-    <header className="h-[50px] bg-[#18181B] border-b border-[#2F2F35] px-3 sm:px-4 flex items-center justify-between gap-3 select-none z-30 shrink-0">
-      {/* Left: Twitch Logo & WatchParty Wordmark */}
-      <div className="flex items-center gap-3 shrink-0">
-        <div className="flex items-center gap-2 cursor-pointer group">
-          {/* Twitch-style glitch play icon */}
-          <div className="w-8 h-8 rounded bg-[#9146FF] flex items-center justify-center shadow-lg shadow-[#9146FF]/30 group-hover:bg-[#772CE8] transition-colors">
-            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+    <header className="h-[50px] bg-[#18181B] border-b border-[#2D2D35] px-3 sm:px-4 flex items-center justify-between gap-3 select-none z-40 shrink-0">
+      {/* Left: Twitch Official Glitch Logo & Links */}
+      <div className="flex items-center gap-4 shrink-0">
+        <a href="/" className="flex items-center gap-2 group cursor-pointer" title="Twitch Watch Party Home">
+          {/* Official Twitch Glitch Logo SVG */}
+          <div className="w-8 h-8 rounded-[4px] bg-[#9146FF] group-hover:bg-[#772CE8] flex items-center justify-center transition-colors shadow-md shadow-[#9146FF]/30">
+            <svg className="w-5 h-5 text-white fill-current" viewBox="0 0 24 24">
               <path d="M11.5 6.5h1.8v5h-1.8zm4.5 0h1.8v5H16zM6 2L2 6v14h5v4l4-4h3.5L22 12V2zm14 9.5l-3 3H13l-3 3v-3H6.5V3.5H20z" />
             </svg>
           </div>
@@ -103,17 +103,28 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
             <span className="text-white">Watch</span>
             <span className="text-[#BF94FF]">Party</span>
           </div>
+        </a>
+
+        {/* Navigation links matching Twitch */}
+        <div className="hidden md:flex items-center gap-1">
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-[4px] hover:bg-[#2F2F35] text-[#EFEFF1] hover:text-[#BF94FF] text-sm font-semibold transition-colors flex items-center gap-1.5"
+          >
+            <Compass className="w-4 h-4 text-[#BF94FF]" />
+            <span>Browse</span>
+          </a>
         </div>
 
-        {/* Room Code Badge */}
+        {/* In-Room Code Badge with 1-Click Copy */}
         {inRoom && roomId && (
-          <div className="hidden md:flex items-center gap-1.5 pl-3 border-l border-[#2F2F35]">
-            <div className="flex items-center gap-1.5 bg-[#1F1F23] border border-[#2F2F35] px-2.5 py-1 rounded-md text-xs">
-              <span className="text-[#ADADB8] text-[10px] font-bold">ROOM:</span>
+          <div className="flex items-center gap-1.5 pl-3 border-l border-[#2F2F35]">
+            <div className="flex items-center gap-1.5 bg-[#1F1F23] border border-[#2F2F35] px-2.5 py-1 rounded-[4px] text-xs">
+              <span className="text-[#ADADB8] text-[10px] font-bold tracking-wider">ROOM:</span>
               <span className="font-mono font-bold text-white tracking-wider">{roomId}</span>
               <button
                 onClick={copyInviteLink}
-                className="ml-1 p-0.5 hover:text-[#9146FF] text-[#ADADB8] transition-colors"
+                className="ml-1 p-0.5 hover:text-[#BF94FF] text-[#ADADB8] transition-colors"
                 title="Copy Invite Link"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -123,24 +134,25 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         )}
       </div>
 
-      {/* Center: Search (in Lobby) OR Quick Video Input / Request (in Room) */}
+      {/* Center: Authentic Twitch Search Bar OR In-Room Video Loader */}
       <div className="flex-1 max-w-md mx-2 hidden sm:block">
         {inRoom ? (
           canControl ? (
-            <form onSubmit={handleVideoSubmit} className="flex items-center gap-1.5">
+            <form onSubmit={handleVideoSubmit} className="flex items-center">
               <div className="relative flex-1">
                 <input
                   type="text"
-                  placeholder="Paste YouTube URL or Video ID to change..."
+                  placeholder="Paste YouTube URL or video ID to change..."
                   value={videoInput}
                   onChange={(e) => setVideoInput(e.target.value)}
-                  className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+                  className="w-full h-[36px] bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#464649] focus:border-[#9146FF] rounded-l-[6px] px-3 text-xs text-[#EFEFF1] placeholder-[#ADADB8] outline-none transition-colors"
                 />
               </div>
               <button
                 type="submit"
                 disabled={!videoInput.trim()}
-                className="px-3 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white rounded font-semibold text-xs transition-colors shrink-0 flex items-center gap-1"
+                className="h-[36px] px-3.5 bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white rounded-r-[6px] font-semibold text-xs transition-colors shrink-0 flex items-center gap-1"
+                title="Change Video Now"
               >
                 <Film className="w-3.5 h-3.5" />
                 <span>Load</span>
@@ -150,50 +162,72 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
             <div className="flex justify-center">
               <button
                 onClick={onRequestControlOpen}
-                className="px-3 py-1.5 bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] hover:border-[#9146FF] text-white rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                className="h-[36px] px-4 bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] hover:border-[#9146FF] text-[#EFEFF1] rounded-[4px] text-xs font-semibold flex items-center gap-2 transition-colors"
               >
                 <Send className="w-3.5 h-3.5 text-[#BF94FF]" />
-                <span>Request Action / Change Video</span>
+                <span>Request Video Change / Control</span>
               </button>
             </div>
           )
         ) : (
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#ADADB8] absolute left-3 top-1/2 -translate-y-1/2" />
+          /* Exact Twitch Search Bar (Input + Attached Search Button) */
+          <div className="flex items-center w-full">
             <input
               type="text"
-              placeholder="Search watch parties or creators..."
-              className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded-md pl-9 pr-3 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+              placeholder="Search watch parties, games, creators..."
+              className="w-full h-[36px] bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#464649] focus:border-[#9146FF] rounded-l-[6px] px-3.5 text-sm text-[#EFEFF1] placeholder-[#ADADB8] outline-none transition-colors"
             />
+            <button
+              className="h-[36px] w-[36px] bg-[#2F2F35] hover:bg-[#3A3A42] border border-l-0 border-[#464649] rounded-r-[6px] flex items-center justify-center text-[#EFEFF1] transition-colors shrink-0"
+              title="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>
 
-      {/* Right: Role Badge, Avatar & Leave Room */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* Right: Prime Crown, Notifications, Whispers, Avatar & Leave */}
+      <div className="flex items-center gap-2 shrink-0">
         {inRoom && renderRoleBadge()}
+
+        {/* Prime Crown Icon */}
+        <button
+          className="p-1.5 rounded-[4px] hover:bg-[#2F2F35] text-[#EFEFF1] transition-colors hidden md:flex items-center justify-center"
+          title="Prime Watch Party"
+        >
+          <Crown className="w-4 h-4 text-[#BF94FF]" />
+        </button>
+
+        {/* Notifications */}
+        <button
+          className="p-1.5 rounded-[4px] hover:bg-[#2F2F35] text-[#EFEFF1] transition-colors hidden sm:flex items-center justify-center"
+          title="Notifications"
+        >
+          <Bell className="w-4 h-4" />
+        </button>
 
         {/* Keyboard Shortcuts Trigger Button */}
         {onOpenShortcuts && (
           <button
             onClick={onOpenShortcuts}
-            className="p-1.5 bg-[#1F1F23] hover:bg-[#26262C] hover:text-[#9146FF] text-[#ADADB8] rounded-md border border-[#2F2F35] transition-colors flex items-center justify-center"
+            className="p-1.5 bg-[#1F1F23] hover:bg-[#26262C] hover:text-[#BF94FF] text-[#ADADB8] rounded-[4px] border border-[#2F2F35] transition-colors flex items-center justify-center"
             title="Keyboard Shortcuts (?)"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
         )}
 
-        {/* User Avatar with online dot */}
-        <div className="flex items-center gap-2 bg-[#1F1F23] pl-1.5 pr-2.5 py-1 rounded-full border border-[#2F2F35]">
+        {/* User Avatar with 8px green status dot */}
+        <div className="flex items-center gap-2 bg-[#1F1F23] pl-1 pr-2.5 py-1 rounded-full border border-[#2F2F35]">
           <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white relative shrink-0"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white relative shrink-0 shadow"
             style={{ backgroundColor: userColor }}
           >
             {username ? username.charAt(0).toUpperCase() : 'U'}
-            <span className="w-1.5 h-1.5 bg-[#00F593] rounded-full absolute -bottom-0.5 -right-0.5 border border-[#18181B]" />
+            <span className="w-2 h-2 bg-[#00F593] rounded-full absolute -bottom-0.5 -right-0.5 border border-[#18181B]" />
           </div>
-          <span className="text-xs font-semibold text-white max-w-[100px] truncate">
+          <span className="text-xs font-semibold text-[#EFEFF1] max-w-[100px] truncate">
             {username || 'Guest'}
           </span>
         </div>
@@ -201,7 +235,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         {inRoom && onLeaveRoom && (
           <button
             onClick={onLeaveRoom}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#1F1F23] hover:bg-[#EB0400] text-[#ADADB8] hover:text-white rounded border border-[#2F2F35] hover:border-[#EB0400] text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#1F1F23] hover:bg-[#EB0400] text-[#ADADB8] hover:text-white rounded-[4px] border border-[#2F2F35] hover:border-[#EB0400] text-xs font-semibold transition-colors"
             title="Leave Watch Party"
           >
             <LogOut className="w-3.5 h-3.5" />
