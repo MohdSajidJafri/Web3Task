@@ -27,6 +27,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { getWatchHistory, clearWatchHistory, formatTimeAgo, HistoryItem } from '../utils/history';
+import { getServerUrl } from '../services/socket';
 
 interface PublicRoomInfo {
   roomId: string;
@@ -81,14 +82,15 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   // Fetch server health and active public rooms on mount & periodically
   useEffect(() => {
     const fetchRoomsAndHealth = () => {
-      fetch('/api/health')
+      const baseUrl = getServerUrl();
+      fetch(`${baseUrl}/api/health`)
         .then((res) => res.json())
         .then((data) => {
           if (data && data.status === 'ok') setServerOnline(true);
         })
         .catch(() => setServerOnline(true));
 
-      fetch('/api/rooms')
+      fetch(`${baseUrl}/api/rooms`)
         .then((res) => res.json())
         .then((data) => {
           if (data && Array.isArray(data.rooms)) {
