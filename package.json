@@ -1,0 +1,20 @@
+{
+  "name": "youtube-watch-party",
+  "version": "1.0.0",
+  "description": "Production-ready YouTube Watch Party System with real-time sync and strict RBAC",
+  "main": "server/src/server.js",
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -k -n \"SERVER,CLIENT\" -c \"blue,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "node server/src/server.js",
+    "test": "node server/test-e2e.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
