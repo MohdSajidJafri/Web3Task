@@ -9,14 +9,14 @@ export const DEMO_ROOMS = {
     title: 'Grand Theft Auto VI Trailer 1',
   },
   LOFIPY: {
-    videoId: 'jfKfPfyJRdk',
+    videoId: '5qap5aO4i9A',
     host: 'Alex',
-    title: 'lofi hip hop radio 📚 beats to relax/study to',
+    title: 'lofi hip hop radio - beats to relax/study to',
   },
   CYBER9: {
-    videoId: 'eaW0t48HGHM',
+    videoId: 'PbVKBoDuhZ0',
     host: 'Jordan',
-    title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Trailer',
+    title: 'Cyberpunk 2077: Phantom Liberty — Official Teaser',
   },
   WEB3AI: {
     videoId: 'M7lc1UVf-VE',

@@ -20,10 +20,10 @@ export const DEFAULT_HISTORY_ITEMS: HistoryItem[] = [
     duration: '01:31',
   },
   {
-    videoId: 'jfKfPfyJRdk',
+    videoId: '5qap5aO4i9A',
     title: 'lofi hip hop radio 📚 beats to relax/study to',
     channel: 'Lofi Girl',
-    thumbnail: 'https://img.youtube.com/vi/jfKfPfyJRdk/mqdefault.jpg',
+    thumbnail: 'https://img.youtube.com/vi/5qap5aO4i9A/mqdefault.jpg',
     watchedAt: Date.now() - 1000 * 60 * 120, // 2 hours ago
     duration: 'LIVE',
   },

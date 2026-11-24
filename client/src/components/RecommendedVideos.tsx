@@ -64,14 +64,14 @@ export const CURATED_RECOMMENDED_VIDEOS: RecommendedVideoItem[] = [
   },
   // Music & Lofi
   {
-    id: 'jfKfPfyJRdk',
-    title: 'lofi hip hop radio 📚 beats to relax/study to',
+    id: 'DWcJFNfaw9c',
+    title: 'synthwave radio 🌌 beats to chill/game to',
     channel: 'Lofi Girl',
-    views: '78K watching',
+    views: '24K watching',
     uploadedAt: 'LIVE',
     duration: 'LIVE',
     category: 'Music',
-    description: 'Peaceful lofi hip hop radio beats to relax, study, work, or sleep to. Available 24/7 on Lofi Girl.',
+    description: 'Peaceful synthwave & chillwave beats to relax, study, game, or sleep to. Available 24/7 on Lofi Girl.',
   },
   {
     id: '5qap5aO4i9A',
@@ -126,10 +126,10 @@ export const CURATED_RECOMMENDED_VIDEOS: RecommendedVideoItem[] = [
   },
   // Gaming
   {
-    id: 'eaW0t48HGHM',
+    id: 'PbVKBoDuhZ0',
     title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Trailer',
     channel: 'Cyberpunk 2077',
-    views: '12M views',
+    views: '15M views',
     uploadedAt: '1 year ago',
     duration: '03:45',
     category: 'Gaming',

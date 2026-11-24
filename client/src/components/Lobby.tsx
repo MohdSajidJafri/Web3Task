@@ -140,7 +140,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   // Quick Preset Chips for Evaluators / Quick Start
   const presetChips = [
     { label: '🎮 GTA VI Trailer', videoId: 'QdBZY2fkU-0', cat: 'gaming' },
-    { label: '🎵 Lofi Beats 24/7', videoId: 'jfKfPfyJRdk', cat: 'music' },
+    { label: '🎵 Lofi Beats 24/7', videoId: '5qap5aO4i9A', cat: 'music' },
     { label: '🌿 4K Nature Relax', videoId: 'LXb3EKWsInQ', cat: 'nature' },
     { label: '🎬 Dune 2 Trailer', videoId: 'Way9Dexny3w', cat: 'trailers' },
     { label: '💻 Web3 & AI Keynote', videoId: 'M7lc1UVf-VE', cat: 'tech' },
@@ -162,7 +162,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
       title: 'Lofi Hip Hop Radio — Beats to Relax/Study',
       creator: 'Alex (Host)',
       viewers: '3.2K',
-      thumbnail: 'https://img.youtube.com/vi/jfKfPfyJRdk/mqdefault.jpg',
+      thumbnail: 'https://img.youtube.com/vi/5qap5aO4i9A/mqdefault.jpg',
       duration: 'LIVE',
       category: 'music',
     },
@@ -171,7 +171,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
       title: 'Cyberpunk 2077 Night City Walkthrough',
       creator: 'Jordan (Host)',
       viewers: '850',
-      thumbnail: 'https://img.youtube.com/vi/eaW0t48HGHM/mqdefault.jpg',
+      thumbnail: 'https://img.youtube.com/vi/PbVKBoDuhZ0/mqdefault.jpg',
       duration: '03:45',
       category: 'gaming',
     },
@@ -290,7 +290,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
             )}
 
             <button
-              onClick={() => handleSelectCategory('music', 'jfKfPfyJRdk')}
+              onClick={() => handleSelectCategory('music', '5qap5aO4i9A')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
                 activeCategory === 'music'
                   ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
@@ -635,6 +635,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                         alt={room.videoTitle}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 opacity-85 group-hover:opacity-100"
                         loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                        }}
                       />
                       <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#EB0400] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
                         <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
@@ -686,6 +689,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                       src={p.thumbnail}
                       alt={p.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 opacity-80 group-hover:opacity-100"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                      }}
                     />
                     {/* Live Badge */}
                     <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#EB0400] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
@@ -750,6 +756,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                           src={item.thumbnail || `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                          }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <Play className="w-4 h-4 text-white fill-current" />

@@ -29,7 +29,8 @@ export async function fetchYouTubeTitle(videoId) {
 
   // Curated fallbacks for quick demo presets
   if (videoId === 'QdBZY2fkU-0') return 'Grand Theft Auto VI Trailer 1';
-  if (videoId === 'jfKfPfyJRdk') return 'lofi hip hop radio 📚 beats to relax/study to';
+  if (videoId === '5qap5aO4i9A' || videoId === 'jfKfPfyJRdk') return 'lofi hip hop radio - beats to relax/study to';
+  if (videoId === 'PbVKBoDuhZ0') return 'Cyberpunk 2077: Phantom Liberty — Official Teaser';
   if (videoId === 'LXb3EKWsInQ') return 'COSTA RICA IN 4K 60fps HDR (ULTRA HD)';
   if (videoId === 'M7lc1UVf-VE') return 'YouTube Developers Live: Embedded Web Player Customization';
 
