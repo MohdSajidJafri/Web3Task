@@ -47,9 +47,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
     return localStorage.getItem('watchsync_username') || '';
   });
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
-  const [partyName, setPartyName] = useState('My Watch Party');
+  const [customVideoUrl, setCustomVideoUrl] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('QdBZY2fkU-0');
-  const [isPublic, setIsPublic] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverOnline, setServerOnline] = useState(true);
   const [error, setError] = useState('');
@@ -62,6 +61,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   const publicRoomsRef = useRef<HTMLDivElement>(null);
   const browseRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+  const roomCodeInputRef = useRef<HTMLInputElement>(null);
 
   const handleClearHistory = () => {
     clearWatchHistory();
@@ -107,25 +107,26 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
   useEffect(() => {
     if (initialRoomCode) {
-      setRoomCode(initialRoomCode);
+      setRoomCode(initialRoomCode.toUpperCase());
     }
   }, [initialRoomCode]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
-      setError('Please enter your display name to start a party');
+      setError('Please choose a display name to host a party');
       return;
     }
     setIsSubmitting(true);
     localStorage.setItem('watchsync_username', username.trim());
-    onJoin(username.trim(), undefined, selectedPresetId);
+    const initialVideo = customVideoUrl.trim() || selectedPresetId;
+    onJoin(username.trim(), undefined, initialVideo);
   };
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
-      setError('Please enter your display name to join');
+      setError('Please enter your nickname to join');
       return;
     }
     if (!roomCode.trim()) {
@@ -137,13 +138,32 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
     onJoin(username.trim(), roomCode.trim().toUpperCase());
   };
 
-  // Quick Preset Chips for Evaluators / Quick Start
-  const presetChips = [
-    { label: '🎮 GTA VI Trailer', videoId: 'QdBZY2fkU-0', cat: 'gaming' },
-    { label: '🎵 Lofi Beats 24/7', videoId: '5qap5aO4i9A', cat: 'music' },
-    { label: '🌿 4K Nature Relax', videoId: 'LXb3EKWsInQ', cat: 'nature' },
-    { label: '🎬 Dune 2 Trailer', videoId: 'Way9Dexny3w', cat: 'trailers' },
-    { label: '💻 Web3 & AI Keynote', videoId: 'M7lc1UVf-VE', cat: 'tech' },
+  // Quick Start Videos as shown on UI reference board
+  const quickStartVideos = [
+    {
+      label: 'Chill Lo-Fi Beat',
+      videoId: '5qap5aO4i9A',
+      title: 'lofi hip hop radio 💤 beats to sleep/chill to',
+      thumbnail: 'https://img.youtube.com/vi/5qap5aO4i9A/mqdefault.jpg',
+    },
+    {
+      label: 'Cinematic Trailer',
+      videoId: 'QdBZY2fkU-0',
+      title: 'Grand Theft Auto VI Trailer 1',
+      thumbnail: 'https://img.youtube.com/vi/QdBZY2fkU-0/mqdefault.jpg',
+    },
+    {
+      label: 'Sci-Fi Short',
+      videoId: 'LXb3EKWsInQ',
+      title: 'COSTA RICA IN 4K 60fps HDR (ULTRA HD)',
+      thumbnail: 'https://img.youtube.com/vi/LXb3EKWsInQ/mqdefault.jpg',
+    },
+    {
+      label: 'Tech Keynote',
+      videoId: 'M7lc1UVf-VE',
+      title: 'YouTube Developers Live: Embedded Web Player',
+      thumbnail: 'https://img.youtube.com/vi/M7lc1UVf-VE/mqdefault.jpg',
+    },
   ];
 
   // Sample curated parties for the "Browse Active Parties" shelf
@@ -202,6 +222,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
     setActiveCategory(cat);
     if (defaultVideoId) {
       setSelectedPresetId(defaultVideoId);
+      setCustomVideoUrl('');
     }
     browseRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -211,18 +232,18 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   );
 
   return (
-    <div className="flex-1 w-full h-[calc(100vh-50px)] flex overflow-hidden bg-[#0E0E10]">
-      {/* 1. Left Navigation Sidebar (Twitch & YouTube Style) */}
+    <div className="flex-1 w-full h-[calc(100vh-56px)] flex overflow-hidden bg-[#131419]">
+      {/* 1. Left Navigation Sidebar (Warm Slate & Coral Theme) */}
       <aside
-        className={`bg-[#18181B] border-r border-[#2F2F35] flex flex-col justify-between shrink-0 select-none transition-all duration-200 z-20 ${
+        className={`bg-[#1B1D24] border-r border-white/[0.08] flex flex-col justify-between shrink-0 select-none transition-all duration-200 z-20 ${
           isSidebarCollapsed ? 'w-[64px]' : 'w-[240px]'
         }`}
       >
-        <div className="flex-1 overflow-y-auto no-scrollbar py-3 space-y-4">
+        <div className="flex-1 overflow-y-auto no-scrollbar py-4 space-y-4">
           {/* Section: Main Nav */}
-          <div className="px-2 space-y-1">
+          <div className="px-3 space-y-1">
             {!isSidebarCollapsed && (
-              <p className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-[#ADADB8] mb-1">
+              <p className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
                 Discover
               </p>
             )}
@@ -232,24 +253,26 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                 setActiveCategory('all');
                 createSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1F1F23] text-white text-xs font-semibold transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#FF5E62]/10 to-[#FF9966]/10 border border-[#FF5E62]/20 text-white text-xs font-semibold hover:border-[#FF5E62]/40 transition-all group"
               title="Home & Create Party"
             >
-              <Sparkles className="w-4 h-4 text-[#BF94FF] shrink-0" />
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-[#FF5E62] to-[#FF9966] flex items-center justify-center shrink-0 shadow-sm shadow-[#FF5E62]/20">
+                <Sparkles className="w-3.5 h-3.5 text-white" />
+              </div>
               {!isSidebarCollapsed && <span>Start a Party</span>}
             </button>
 
             <button
               onClick={() => publicRoomsRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#1F1F23] text-[#EFEFF1] text-xs font-semibold transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[#242731] text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
               title="Open Public Rooms"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <Globe className="w-4 h-4 text-[#00F593] shrink-0" />
+                <Globe className="w-4 h-4 text-[#2EE59D] shrink-0" />
                 {!isSidebarCollapsed && <span className="truncate">Public Rooms</span>}
               </div>
               {!isSidebarCollapsed && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#00F593]/20 text-[#00F593] border border-[#00F593]/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#2EE59D]/15 text-[#2EE59D] border border-[#2EE59D]/30">
                   {publicRooms.length} Live
                 </span>
               )}
@@ -257,24 +280,24 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
             <button
               onClick={() => browseRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1F1F23] text-[#EFEFF1] text-xs font-semibold transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#242731] text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
               title="Browse Featured Parties"
             >
-              <Flame className="w-4 h-4 text-[#EB0400] shrink-0" />
+              <Flame className="w-4 h-4 text-[#FF5E62] shrink-0" />
               {!isSidebarCollapsed && <span>Browse Featured</span>}
             </button>
 
             <button
               onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#1F1F23] text-[#EFEFF1] text-xs font-semibold transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[#242731] text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
               title="Recently Watched History"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <Clock className="w-4 h-4 text-[#BF94FF] shrink-0" />
+                <Clock className="w-4 h-4 text-[#FFA751] shrink-0" />
                 {!isSidebarCollapsed && <span className="truncate">Watch History</span>}
               </div>
               {!isSidebarCollapsed && watchHistory.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#1F1F23] text-[#ADADB8] border border-[#2F2F35]">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#242731] text-zinc-400 border border-white/[0.08]">
                   {watchHistory.length}
                 </span>
               )}
@@ -282,45 +305,45 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
           </div>
 
           {/* Section: Categories */}
-          <div className="px-2 pt-2 border-t border-[#2F2F35]/60 space-y-1">
+          <div className="px-3 pt-3 border-t border-white/[0.08] space-y-1">
             {!isSidebarCollapsed && (
-              <p className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-[#ADADB8] mb-1">
+              <p className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
                 Categories
               </p>
             )}
 
             <button
               onClick={() => handleSelectCategory('music', '5qap5aO4i9A')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeCategory === 'music'
-                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
-                  : 'hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white'
+                  ? 'bg-[#FF5E62]/15 text-[#FF9966] border border-[#FF5E62]/30'
+                  : 'hover:bg-[#242731] text-zinc-400 hover:text-white'
               }`}
               title="Music & Lofi"
             >
-              <Music className="w-4 h-4 text-[#BF94FF] shrink-0" />
+              <Music className="w-4 h-4 text-[#FF9966] shrink-0" />
               {!isSidebarCollapsed && <span>Music & Lofi</span>}
             </button>
 
             <button
               onClick={() => handleSelectCategory('gaming', 'QdBZY2fkU-0')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeCategory === 'gaming'
-                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
-                  : 'hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white'
+                  ? 'bg-[#FF5E62]/15 text-[#FF9966] border border-[#FF5E62]/30'
+                  : 'hover:bg-[#242731] text-zinc-400 hover:text-white'
               }`}
               title="Gaming Streams"
             >
-              <Gamepad2 className="w-4 h-4 text-[#00F593] shrink-0" />
+              <Gamepad2 className="w-4 h-4 text-[#2EE59D] shrink-0" />
               {!isSidebarCollapsed && <span>Gaming</span>}
             </button>
 
             <button
               onClick={() => handleSelectCategory('trailers', 'Way9Dexny3w')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeCategory === 'trailers'
-                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
-                  : 'hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white'
+                  ? 'bg-[#FF5E62]/15 text-[#FF9966] border border-[#FF5E62]/30'
+                  : 'hover:bg-[#242731] text-zinc-400 hover:text-white'
               }`}
               title="Movie Trailers"
             >
@@ -330,10 +353,10 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
             <button
               onClick={() => handleSelectCategory('nature', 'LXb3EKWsInQ')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeCategory === 'nature'
-                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
-                  : 'hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white'
+                  ? 'bg-[#FF5E62]/15 text-[#FF9966] border border-[#FF5E62]/30'
+                  : 'hover:bg-[#242731] text-zinc-400 hover:text-white'
               }`}
               title="4K Nature & Relax"
             >
@@ -343,30 +366,30 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
             <button
               onClick={() => handleSelectCategory('tech', 'M7lc1UVf-VE')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeCategory === 'tech'
-                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
-                  : 'hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white'
+                  ? 'bg-[#FF5E62]/15 text-[#FF9966] border border-[#FF5E62]/30'
+                  : 'hover:bg-[#242731] text-zinc-400 hover:text-white'
               }`}
               title="Tech & Keynotes"
             >
-              <Cpu className="w-4 h-4 text-[#FF69B4] shrink-0" />
+              <Cpu className="w-4 h-4 text-[#FF758C] shrink-0" />
               {!isSidebarCollapsed && <span>Tech & Talks</span>}
             </button>
           </div>
         </div>
 
         {/* Sidebar Footer: Health & Collapse Toggle */}
-        <div className="p-3 border-t border-[#2F2F35] flex items-center justify-between gap-2">
+        <div className="p-3 border-t border-white/[0.08] flex items-center justify-between gap-2">
           {!isSidebarCollapsed ? (
             <>
-              <div className="flex items-center gap-2 text-[11px] font-mono text-[#00F593]">
-                <span className="w-2 h-2 rounded-full bg-[#00F593] animate-pulse" />
+              <div className="flex items-center gap-2 text-[11px] font-mono text-[#2EE59D]">
+                <span className="w-2 h-2 rounded-full bg-[#2EE59D] animate-pulse" />
                 <span>Server Online</span>
               </div>
               <button
                 onClick={() => setIsSidebarCollapsed(true)}
-                className="p-1 rounded hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white transition-colors"
+                className="p-1.5 rounded-lg hover:bg-[#242731] text-zinc-400 hover:text-white transition-colors"
                 title="Collapse sidebar"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -375,7 +398,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
           ) : (
             <button
               onClick={() => setIsSidebarCollapsed(false)}
-              className="w-full flex items-center justify-center p-1 rounded hover:bg-[#1F1F23] text-[#ADADB8] hover:text-white transition-colors"
+              className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-[#242731] text-zinc-400 hover:text-white transition-colors"
               title="Expand sidebar"
             >
               <ChevronRight className="w-4 h-4" />
@@ -384,279 +407,307 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
         </div>
       </aside>
 
-      {/* 2. Main Scrollable Content */}
-      <main className="flex-1 h-full overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 relative no-scrollbar">
-        {/* Subtle purple radial glow backdrop */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-[#9146FF]/10 blur-[120px] pointer-events-none rounded-full" />
+      {/* 2. Main Scrollable Canvas */}
+      <main className="flex-1 h-full overflow-y-auto px-4 sm:px-6 lg:px-10 py-8 relative no-scrollbar">
+        {/* Soft Warm Coral-Amber ambient radial backdrop */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[750px] h-[320px] bg-gradient-to-r from-[#FF5E62]/15 to-[#FF9966]/10 blur-[130px] pointer-events-none rounded-full" />
 
-        <div className="w-full max-w-4xl mx-auto space-y-8 z-10 relative">
-          {/* Section: Create / Join Hero */}
-          <div ref={createSectionRef} className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#2F2F35]/60">
-              <div className="space-y-1">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                  <span>Start or Join a Watch Party</span>
-                </h1>
-                <p className="text-xs sm:text-sm text-[#ADADB8]">
-                  Real-time synchronized YouTube theater with strict server-side RBAC, shared queue & live chat.
-                </p>
-              </div>
-
-              {/* Server Online Health Pill */}
-              <div className="self-start sm:self-auto flex items-center gap-2 px-3 py-1 rounded-full bg-[#18181B] border border-[#2F2F35] text-xs font-mono">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F593] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F593]"></span>
-                </span>
-                <span className="text-[#00F593] font-bold">Server Online</span>
-              </div>
-            </div>
+        <div className="w-full max-w-4xl mx-auto space-y-9 z-10 relative">
+          {/* Hero Headline & Subtitle */}
+          <div ref={createSectionRef} className="text-center space-y-2 pt-2">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight flex items-center justify-center gap-2">
+              <span className="bg-gradient-to-r from-[#FF5E62] via-[#FF758C] to-[#FF9966] bg-clip-text text-transparent">
+                Watch Together with Friends
+              </span>
+            </h1>
+            <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto font-medium">
+              Create a private space or jump into an active watch party.
+            </p>
 
             {error && (
-              <div className="p-3 bg-[#EB0400]/10 border border-[#EB0400]/40 rounded-lg text-[#FF4A4A] text-xs font-semibold animate-in fade-in duration-150">
+              <div className="max-w-md mx-auto p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-semibold mt-3 animate-in fade-in duration-150">
                 {error}
               </div>
             )}
+          </div>
 
-            {/* Two Side-by-Side Cards (Twitch Theater Style) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Card 1: Create Watch Party */}
-              <div className="bg-[#18181B] border border-[#2F2F35] rounded-xl p-5 sm:p-6 flex flex-col justify-between shadow-2xl hover:border-[#9146FF]/40 transition-all duration-150">
-                <form onSubmit={handleCreate} className="space-y-4 flex flex-col justify-between h-full">
-                  <div className="space-y-3">
-                    <h2 className="text-base font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-[#BF94FF]" />
-                      <span>Create Watch Party</span>
+          {/* Two Tactile Bento Cards (Reference Blueprint) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Card 1: Host a Party */}
+            <div className="bg-[#1B1D24] border border-white/[0.08] hover:border-white/[0.15] rounded-2xl p-7 flex flex-col justify-between shadow-xl shadow-black/40 transition-all duration-200">
+              <form onSubmit={handleCreate} className="space-y-5 flex flex-col justify-between h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-1">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <span>Host a Party</span>
                     </h2>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1">
-                        Your Display Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Sajid"
-                        value={username}
-                        onChange={(e) => {
-                          setUsername(e.target.value);
-                          setError('');
-                        }}
-                        maxLength={24}
-                        className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1">
-                        Party Name (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. GTA VI Trailer & Beats"
-                        value={partyName}
-                        onChange={(e) => setPartyName(e.target.value)}
-                        className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
-                      />
-                    </div>
-
-                    {/* Quick Demo Preset Chips for evaluators */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1.5">
-                        Quick-Start Demo Video:
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {presetChips.map((chip) => (
-                          <button
-                            key={chip.videoId}
-                            type="button"
-                            onClick={() => setSelectedPresetId(chip.videoId)}
-                            className={`px-2 py-1 rounded text-[11px] font-medium border transition-all ${
-                              selectedPresetId === chip.videoId
-                                ? 'bg-[#9146FF]/20 border-[#9146FF] text-white font-bold'
-                                : 'bg-[#1F1F23] border-[#2F2F35] text-[#ADADB8] hover:text-white'
-                            }`}
-                          >
-                            {chip.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Public / Private radios */}
-                    <div className="flex items-center gap-5 pt-1 text-xs">
-                      <label
-                        onClick={() => setIsPublic(true)}
-                        className="flex items-center gap-1.5 cursor-pointer text-[#EFEFF1]"
-                      >
-                        <span
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                            isPublic ? 'border-[#9146FF]' : 'border-[#464649]'
-                          }`}
-                        >
-                          {isPublic && <span className="w-2 h-2 rounded-full bg-[#9146FF]" />}
-                        </span>
-                        <Globe className="w-3.5 h-3.5 text-[#ADADB8]" />
-                        <span>Public</span>
-                      </label>
-
-                      <label
-                        onClick={() => setIsPublic(false)}
-                        className="flex items-center gap-1.5 cursor-pointer text-[#ADADB8] hover:text-[#EFEFF1]"
-                      >
-                        <span
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                            !isPublic ? 'border-[#9146FF]' : 'border-[#464649]'
-                          }`}
-                        >
-                          {!isPublic && <span className="w-2 h-2 rounded-full bg-[#9146FF]" />}
-                        </span>
-                        <Lock className="w-3.5 h-3.5 text-[#ADADB8]" />
-                        <span>Private</span>
-                      </label>
-                    </div>
+                    <span className="text-[10px] uppercase font-bold text-amber-300/80 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      Host Mode
+                    </span>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-2.5 px-4 bg-[#9146FF] hover:bg-[#772CE8] active:scale-[0.98] disabled:opacity-50 text-white rounded font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-4"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Connecting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 fill-current" />
-                        <span>Start Watch Party</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              {/* Card 2: Join Room Code */}
-              <div className="bg-[#18181B] border border-[#2F2F35] rounded-xl p-5 sm:p-6 flex flex-col justify-between shadow-2xl hover:border-[#9146FF]/40 transition-all duration-150">
-                <form onSubmit={handleJoin} className="space-y-4">
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <LogIn className="w-4 h-4 text-[#00F593]" />
-                    <span>Join Room Code</span>
-                  </h2>
-
+                  {/* Choose a Name */}
                   <div>
-                    <label className="text-[11px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1">
-                      Your Display Name
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Choose a Name
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. ViewerOne"
+                      placeholder="Sajid's Movie Night..."
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value);
                         setError('');
                       }}
                       maxLength={24}
-                      className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+                      className="w-full bg-[#242731] hover:bg-[#2C303D] focus:bg-[#1B1D24] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none transition-all shadow-inner"
                     />
                   </div>
 
+                  {/* YouTube Link (Optional) */}
                   <div>
-                    <label className="text-[11px] font-semibold text-[#ADADB8] uppercase tracking-wider block mb-1">
-                      6-Character Room Code
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      YouTube Link (Optional)
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. ABC123"
-                      value={roomCode}
+                      placeholder="YouTube Link (optional)"
+                      value={customVideoUrl}
+                      onChange={(e) => setCustomVideoUrl(e.target.value)}
+                      className="w-full bg-[#242731] hover:bg-[#2C303D] focus:bg-[#1B1D24] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none transition-all shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                {/* Coral-Sunset Create Room CTA Button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-[#FF5E62]/25 transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Creating Party...</span>
+                    </>
+                  ) : (
+                    <span>Create Room</span>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* Card 2: Join a Room */}
+            <div className="bg-[#1B1D24] border border-white/[0.08] hover:border-white/[0.15] rounded-2xl p-7 flex flex-col justify-between shadow-xl shadow-black/40 transition-all duration-200">
+              <form onSubmit={handleJoin} className="space-y-5 flex flex-col justify-between h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-1">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <span>Join a Room</span>
+                    </h2>
+                    <span className="text-[10px] uppercase font-bold text-sky-300/80 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded-full">
+                      Participant
+                    </span>
+                  </div>
+
+                  {/* Your Nickname */}
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Your Nickname
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Your Nickname"
+                      value={username}
                       onChange={(e) => {
-                        setRoomCode(e.target.value.toUpperCase());
+                        setUsername(e.target.value);
                         setError('');
                       }}
-                      maxLength={6}
-                      className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-sm font-mono font-bold tracking-widest text-white uppercase placeholder-[#71717A] outline-none transition-colors"
+                      maxLength={24}
+                      className="w-full bg-[#242731] hover:bg-[#2C303D] focus:bg-[#1B1D24] border border-white/[0.08] focus:border-[#FF8C42] rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none transition-all shadow-inner"
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-2.5 px-4 bg-[#1F1F23] hover:bg-[#26262C] active:scale-[0.98] border border-[#2F2F35] hover:border-[#00F593] disabled:opacity-50 text-white rounded font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Joining Party...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Users className="w-4 h-4 text-[#00F593]" />
-                        <span>Join Party</span>
-                      </>
-                    )}
-                  </button>
+                  {/* Room Code with 6 tactile boxes matching reference */}
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Room Code
+                    </label>
 
-                  <div className="pt-2 text-center">
-                    <p className="text-[11px] text-[#ADADB8]">
-                      Joining via invite link auto-fills the room code.
-                    </p>
+                    {/* Hidden input to capture typing */}
+                    <div className="relative">
+                      <input
+                        ref={roomCodeInputRef}
+                        type="text"
+                        value={roomCode}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                          setRoomCode(val);
+                          setError('');
+                        }}
+                        maxLength={6}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                        autoFocus={!!initialRoomCode}
+                      />
+
+                      {/* 6 Tactile Rounded Segmented Boxes */}
+                      <div className="flex gap-2">
+                        {[0, 1, 2, 3, 4, 5].map((idx) => {
+                          const char = roomCode[idx] || '';
+                          const isCurrent = idx === roomCode.length;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => roomCodeInputRef.current?.focus()}
+                              className={`flex-1 h-12 rounded-xl flex items-center justify-center font-mono font-bold text-base transition-all select-none ${
+                                char
+                                  ? 'bg-[#242731] border border-[#FF8C42] text-white shadow-md shadow-[#FF8C42]/10 scale-100'
+                                  : isCurrent
+                                  ? 'bg-[#242731] border-2 border-[#FFA751] text-zinc-300 animate-pulse'
+                                  : 'bg-[#242731] border border-white/[0.08] text-zinc-600'
+                              }`}
+                            >
+                              {char || '—'}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                </form>
-              </div>
+                </div>
+
+                {/* Warm Amber-Sunset Enter Room CTA Button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-[#FF8C42] to-[#FFA751] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-[#FF8C42]/25 transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Entering Room...</span>
+                    </>
+                  ) : (
+                    <span>Enter Room</span>
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Quick-Start Videos Strip (From Visual Reference Board) */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <Film className="w-4 h-4 text-[#FF5E62]" />
+                <span>Quick-Start Videos</span>
+              </h3>
+              <span className="text-[11px] text-zinc-500">Click any card to pre-fill starting video</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+              {quickStartVideos.map((video) => {
+                const isSelected = selectedPresetId === video.videoId;
+                return (
+                  <div
+                    key={video.videoId}
+                    onClick={() => {
+                      setSelectedPresetId(video.videoId);
+                      setCustomVideoUrl('');
+                    }}
+                    className={`group cursor-pointer bg-[#1B1D24] border rounded-2xl overflow-hidden transition-all duration-200 hover:-translate-y-1 shadow-lg flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-[#FF5E62] ring-1 ring-[#FF5E62] shadow-[#FF5E62]/15'
+                        : 'border-white/[0.08] hover:border-white/[0.2]'
+                    }`}
+                  >
+                    <div className="relative aspect-video w-full bg-black overflow-hidden">
+                      <img
+                        src={video.thumbnail}
+                        alt={video.label}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-85 group-hover:opacity-100"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#FF5E62] to-[#FF9966] flex items-center justify-center text-white shadow-lg">
+                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-[#FF5E62] text-white text-[9px] font-bold shadow">
+                          SELECTED
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="text-xs font-semibold text-white truncate group-hover:text-[#FF9966] transition-colors">
+                        {video.label}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Section: Open Public Rooms Shelf (Live from Server) */}
-          <div ref={publicRoomsRef} className="space-y-3 pt-2">
+          <div ref={publicRoomsRef} className="space-y-3 pt-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Globe className="w-4 h-4 text-[#00F593]" />
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[#2EE59D]" />
                 <span>Open Public Rooms</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#00F593]/20 text-[#00F593] border border-[#00F593]/40">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#2EE59D]/15 text-[#2EE59D] border border-[#2EE59D]/30">
                   {publicRooms.length} Live Now
                 </span>
               </h3>
-              <span className="text-[11px] text-[#ADADB8]">Synced with server in real time</span>
+              <span className="text-[11px] text-zinc-500">Synced with server in real time</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {publicRooms.map((room) => {
                 const thumbnailSrc = `https://img.youtube.com/vi/${room.videoId}/mqdefault.jpg`;
                 return (
                   <div
                     key={room.roomId}
                     onClick={() => handleSelectSample(room.roomId)}
-                    className="group cursor-pointer bg-[#18181B] border border-[#2F2F35] hover:border-[#00F593] rounded-lg overflow-hidden transition-all duration-150 hover:-translate-y-0.5 shadow-lg flex flex-col justify-between"
+                    className="group cursor-pointer bg-[#1B1D24] border border-white/[0.08] hover:border-[#2EE59D]/50 rounded-2xl overflow-hidden transition-all duration-200 hover:-translate-y-1 shadow-xl shadow-black/30 flex flex-col justify-between"
                   >
                     {/* Thumbnail */}
                     <div className="relative aspect-video w-full bg-black overflow-hidden">
                       <img
                         src={thumbnailSrc}
                         alt={room.videoTitle}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 opacity-85 group-hover:opacity-100"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-85 group-hover:opacity-100"
                         loading="lazy"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                          (e.target as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
                         }}
                       />
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#EB0400] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#FF5E62] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
                         <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                         <span>LIVE</span>
                       </div>
-                      <div className="absolute bottom-1.5 left-2 px-1.5 py-0.2 rounded bg-black/75 text-[#00F593] text-[10px] font-mono font-bold tabular-nums">
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-[#2EE59D] text-[10px] font-mono font-bold tabular-nums">
                         👥 {room.viewers} in room
                       </div>
                     </div>
 
                     {/* Details */}
-                    <div className="p-2.5 space-y-1">
-                      <h4 className="text-xs font-semibold text-white line-clamp-1 group-hover:text-[#00F593] transition-colors" title={room.videoTitle}>
+                    <div className="p-3 space-y-1.5">
+                      <h4
+                        className="text-xs font-semibold text-white line-clamp-1 group-hover:text-[#2EE59D] transition-colors"
+                        title={room.videoTitle}
+                      >
                         {room.videoTitle}
                       </h4>
-                      <p className="text-[10px] text-[#ADADB8] flex items-center justify-between pt-0.5">
+                      <p className="text-[11px] text-zinc-400 flex items-center justify-between pt-0.5">
                         <span className="font-mono font-bold text-white">ROOM: {room.roomId}</span>
-                        <span className="text-[#00F593] font-bold group-hover:underline flex items-center gap-0.5">
-                          Join <ArrowRight className="w-2.5 h-2.5" />
+                        <span className="text-[#2EE59D] font-bold group-hover:underline flex items-center gap-1">
+                          Join <ArrowRight className="w-3 h-3" />
                         </span>
                       </p>
                     </div>
@@ -667,55 +718,53 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
           </div>
 
           {/* Section: Browse Featured Parties */}
-          <div ref={browseRef} className="space-y-3 pt-2">
+          <div ref={browseRef} className="space-y-3 pt-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-[#EB0400]" />
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <Flame className="w-4 h-4 text-[#FF5E62]" />
                 <span>Browse Featured Parties</span>
               </h3>
-              <span className="text-[11px] text-[#ADADB8]">Click any party to quick-join</span>
+              <span className="text-[11px] text-zinc-500">Click any party to quick-join</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {filteredParties.map((p) => (
                 <div
                   key={p.id}
                   onClick={() => handleSelectSample(p.id)}
-                  className="group cursor-pointer bg-[#18181B] border border-[#2F2F35] hover:border-[#9146FF] rounded-lg overflow-hidden transition-all duration-150 hover:-translate-y-0.5 shadow-lg"
+                  className="group cursor-pointer bg-[#1B1D24] border border-white/[0.08] hover:border-[#FF5E62]/50 rounded-2xl overflow-hidden transition-all duration-200 hover:-translate-y-1 shadow-xl shadow-black/30 flex flex-col justify-between"
                 >
                   {/* Thumbnail */}
                   <div className="relative aspect-video w-full bg-black overflow-hidden">
                     <img
                       src={p.thumbnail}
                       alt={p.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 opacity-80 group-hover:opacity-100"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-85 group-hover:opacity-100"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                        (e.target as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
                       }}
                     />
-                    {/* Live Badge */}
-                    <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#EB0400] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#FF5E62] text-white text-[9px] font-black uppercase flex items-center gap-1 shadow">
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                       <span>LIVE</span>
                     </div>
-                    {/* Viewers */}
-                    <div className="absolute bottom-1.5 left-2 px-1.5 py-0.2 rounded bg-black/75 text-[#EFEFF1] text-[10px] font-mono tabular-nums">
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-zinc-300 text-[10px] font-mono tabular-nums">
                       👥 {p.viewers}
                     </div>
-                    {/* Duration */}
-                    <div className="absolute bottom-1.5 right-2 px-1.5 py-0.2 rounded bg-black/75 text-[#EFEFF1] text-[10px] font-mono">
+                    <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-zinc-300 text-[10px] font-mono">
                       {p.duration}
                     </div>
                   </div>
 
                   {/* Details */}
-                  <div className="p-2.5 space-y-1">
-                    <h4 className="text-xs font-semibold text-white line-clamp-1 group-hover:text-[#BF94FF] transition-colors">
+                  <div className="p-3 space-y-1.5">
+                    <h4 className="text-xs font-semibold text-white line-clamp-1 group-hover:text-[#FF9966] transition-colors">
                       {p.title}
                     </h4>
-                    <p className="text-[10px] text-[#ADADB8] flex items-center justify-between">
+                    <p className="text-[11px] text-zinc-400 flex items-center justify-between">
                       <span>{p.creator}</span>
-                      <span className="font-mono text-[10px] text-[#9146FF] font-bold">CODE: {p.id}</span>
+                      <span className="font-mono text-[11px] text-[#FF8C42] font-bold">CODE: {p.id}</span>
                     </p>
                   </div>
                 </div>
@@ -726,16 +775,16 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
           {/* Section: Recently Watched & History */}
           <div ref={historyRef}>
             {watchHistory.length > 0 && (
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-[#BF94FF]" />
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#FFA751]" />
                     <span>Recently Watched & History</span>
                   </h3>
                   <button
                     type="button"
                     onClick={handleClearHistory}
-                    className="text-[11px] text-[#ADADB8] hover:text-[#EB0400] flex items-center gap-1 transition-colors"
+                    className="text-[11px] text-zinc-500 hover:text-rose-400 flex items-center gap-1.5 transition-colors"
                     title="Clear your watch history"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -743,21 +792,22 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {watchHistory.slice(0, 6).map((item) => (
                     <div
                       key={item.videoId}
                       onClick={() => handleWatchFromHistory(item)}
-                      className="group cursor-pointer bg-[#18181B] border border-[#2F2F35] hover:border-[#9146FF] rounded-lg overflow-hidden transition-all duration-150 hover:-translate-y-0.5 shadow-lg flex items-center gap-3 p-2"
+                      className="group cursor-pointer bg-[#1B1D24] border border-white/[0.08] hover:border-[#FF5E62]/50 rounded-2xl overflow-hidden transition-all duration-200 hover:-translate-y-1 shadow-xl shadow-black/30 flex items-center gap-3 p-2.5"
                     >
                       {/* Thumbnail */}
-                      <div className="relative aspect-video w-28 bg-black rounded overflow-hidden shrink-0">
+                      <div className="relative aspect-video w-28 bg-black rounded-xl overflow-hidden shrink-0">
                         <img
                           src={item.thumbnail || `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
                           alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
+                            (e.target as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
                           }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -767,13 +817,16 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
 
                       {/* Info */}
                       <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="text-xs font-bold text-white line-clamp-1 group-hover:text-[#BF94FF] transition-colors" title={item.title}>
+                        <h4
+                          className="text-xs font-bold text-white line-clamp-1 group-hover:text-[#FF9966] transition-colors"
+                          title={item.title}
+                        >
                           {item.title}
                         </h4>
-                        <p className="text-[11px] text-[#ADADB8] truncate">{item.channel || 'Watch Party'}</p>
-                        <div className="flex items-center justify-between text-[10px] text-[#71717A] pt-0.5">
+                        <p className="text-[11px] text-zinc-400 truncate">{item.channel || 'Watch Party'}</p>
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-0.5">
                           <span>{formatTimeAgo(item.watchedAt)}</span>
-                          <span className="text-[#9146FF] font-semibold group-hover:underline">Start Party →</span>
+                          <span className="text-[#FF8C42] font-semibold group-hover:underline">Start Party →</span>
                         </div>
                       </div>
                     </div>
@@ -783,29 +836,6 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
             )}
           </div>
         </div>
-
-        {/* Keyboard Shortcut Hints Strip at Bottom */}
-        <footer className="w-full max-w-4xl mx-auto pt-8 pb-4 mt-8 border-t border-[#2F2F35]/40 flex flex-wrap items-center justify-center gap-4 text-[11px] text-[#ADADB8] select-none">
-          <span className="flex items-center gap-1 font-semibold text-white">
-            <Command className="w-3.5 h-3.5 text-[#BF94FF]" />
-            <span>Shortcuts:</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#1F1F23] border border-[#2F2F35] rounded text-white font-mono text-[10px]">Space</kbd> Play/Pause
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#1F1F23] border border-[#2F2F35] rounded text-white font-mono text-[10px]">← / →</kbd> Seek 5s
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#1F1F23] border border-[#2F2F35] rounded text-white font-mono text-[10px]">M</kbd> Mute
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#1F1F23] border border-[#2F2F35] rounded text-white font-mono text-[10px]">F</kbd> Fullscreen
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-[#1F1F23] border border-[#2F2F35] rounded text-white font-mono text-[10px]">C</kbd> Toggle Chat
-          </span>
-        </footer>
       </main>
     </div>
   );

@@ -75,21 +75,21 @@ export const RequestControlModal: React.FC<RequestControlModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none">
-      <div className="bg-[#18181B] border border-[#2F2F35] w-full max-w-md rounded-xl p-5 shadow-2xl space-y-4">
+      <div className="bg-[#1B1D24] border border-white/[0.08] w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#2F2F35]">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded bg-[#9146FF]/20 text-[#BF94FF]">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
               <Shield className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-sm text-white">Request Host Action</h3>
-              <p className="text-[11px] text-[#ADADB8]">Hosts and Moderators will review your request</p>
+              <p className="text-[11px] text-zinc-400">Hosts and Moderators will review your request</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded text-[#ADADB8] hover:text-white hover:bg-[#1F1F23] transition-colors"
+            className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-[#242731] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -98,118 +98,105 @@ export const RequestControlModal: React.FC<RequestControlModalProps> = ({
         {/* Options */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-[#ADADB8]">
-              Select Action
+            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+              Choose Action to Request
             </label>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setAction('play')}
-                className={`flex items-center gap-2 p-2.5 rounded border transition-all text-left ${
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all ${
                   action === 'play'
-                    ? 'border-[#9146FF] bg-[#9146FF]/20 text-white font-bold'
-                    : 'border-[#2F2F35] bg-[#1F1F23] text-[#ADADB8] hover:border-[#464649]'
+                    ? 'bg-[#FF5E62]/15 border-[#FF5E62] text-[#FF9966]'
+                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300'
                 }`}
               >
-                <Play className="w-4 h-4 text-[#00F593]" />
-                <span>Request Play</span>
+                <Play className="w-4 h-4" />
+                <span>Resume Play</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAction('pause')}
-                className={`flex items-center gap-2 p-2.5 rounded border transition-all text-left ${
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all ${
                   action === 'pause'
-                    ? 'border-[#9146FF] bg-[#9146FF]/20 text-white font-bold'
-                    : 'border-[#2F2F35] bg-[#1F1F23] text-[#ADADB8] hover:border-[#464649]'
+                    ? 'bg-[#FF5E62]/15 border-[#FF5E62] text-[#FF9966]'
+                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300'
                 }`}
               >
-                <Pause className="w-4 h-4 text-[#FFD700]" />
-                <span>Request Pause</span>
+                <Pause className="w-4 h-4" />
+                <span>Pause</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAction('seek')}
-                className={`flex items-center gap-2 p-2.5 rounded border transition-all text-left ${
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all ${
                   action === 'seek'
-                    ? 'border-[#9146FF] bg-[#9146FF]/20 text-white font-bold'
-                    : 'border-[#2F2F35] bg-[#1F1F23] text-[#ADADB8] hover:border-[#464649]'
+                    ? 'bg-[#FF5E62]/15 border-[#FF5E62] text-[#FF9966]'
+                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300'
                 }`}
               >
-                <FastForward className="w-4 h-4 text-[#00E5FF]" />
-                <span>Request Seek</span>
+                <FastForward className="w-4 h-4" />
+                <span>Seek / Jump</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAction('change_video')}
-                className={`flex items-center gap-2 p-2.5 rounded border transition-all text-left ${
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all ${
                   action === 'change_video'
-                    ? 'border-[#9146FF] bg-[#9146FF]/20 text-white font-bold'
-                    : 'border-[#2F2F35] bg-[#1F1F23] text-[#ADADB8] hover:border-[#464649]'
+                    ? 'bg-[#FF5E62]/15 border-[#FF5E62] text-[#FF9966]'
+                    : 'bg-[#242731] hover:bg-[#2C303D] border-white/[0.08] text-zinc-300'
                 }`}
               >
-                <Film className="w-4 h-4 text-[#BF94FF]" />
+                <Film className="w-4 h-4" />
                 <span>Change Video</span>
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setAction('request_moderator')}
-              className={`w-full flex items-center justify-center gap-2 p-2.5 mt-2 rounded border transition-all text-xs ${
-                action === 'request_moderator'
-                  ? 'border-[#9146FF] bg-[#9146FF]/20 text-[#BF94FF] font-bold'
-                  : 'border-[#2F2F35] bg-[#1F1F23] text-[#ADADB8] hover:border-[#464649]'
-              }`}
-            >
-              <Shield className="w-4 h-4 text-[#00AD03]" />
-              <span>Request Moderator Role (Self-Control)</span>
-            </button>
           </div>
 
           {action === 'seek' && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-[#ADADB8]">
-                Seek Timestamp (MM:SS or seconds)
+            <div>
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                Target Timestamp (MM:SS)
               </label>
               <input
                 type="text"
-                placeholder="02:15"
+                placeholder="02:45"
                 value={seekTime}
                 onChange={(e) => setSeekTime(e.target.value)}
-                className="w-full bg-[#1F1F23] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white outline-none font-mono"
+                className="w-full bg-[#242731] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl px-3 py-2 text-xs font-mono text-white outline-none"
               />
             </div>
           )}
 
           {action === 'change_video' && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-[#ADADB8]">
-                YouTube URL or Video ID
+            <div>
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                YouTube Video URL or ID
               </label>
               <input
                 type="text"
-                placeholder="https://youtu.be/..."
+                placeholder="https://www.youtube.com/watch?v=..."
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                className="w-full bg-[#1F1F23] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white outline-none"
+                className="w-full bg-[#242731] border border-white/[0.08] focus:border-[#FF5E62] rounded-xl px-3 py-2 text-xs text-white outline-none"
               />
             </div>
           )}
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 rounded text-xs font-semibold text-[#ADADB8] hover:text-white bg-[#1F1F23] hover:bg-[#26262C] transition-colors"
+              className="px-4 py-2 rounded-xl bg-[#242731] hover:bg-[#2C303D] text-zinc-400 hover:text-white text-xs font-semibold transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded text-xs font-bold bg-[#9146FF] hover:bg-[#772CE8] text-white shadow-md transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#FF5E62] to-[#FF9966] hover:brightness-110 active:scale-[0.98] text-white text-xs font-bold shadow-md shadow-[#FF5E62]/25 transition-all flex items-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Submit Request</span>

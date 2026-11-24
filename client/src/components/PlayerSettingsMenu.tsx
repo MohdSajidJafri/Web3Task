@@ -78,14 +78,14 @@ export const PlayerSettingsMenu: React.FC<PlayerSettingsMenuProps> = ({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-12 right-2 z-50 w-64 bg-[#18181B]/95 backdrop-blur-md border border-[#2F2F35] rounded-xl shadow-2xl p-1.5 text-xs text-white select-none animate-in fade-in zoom-in-95 duration-150"
+      className="absolute bottom-12 right-2 z-50 w-64 bg-[#1B1D24]/95 backdrop-blur-md border border-white/[0.1] rounded-2xl shadow-2xl p-2 text-xs text-white select-none animate-in fade-in zoom-in-95 duration-150"
     >
       {/* 1. Main Settings Menu */}
       {subMenu === 'main' && (
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#2F2F35]/60 text-[#ADADB8] font-bold text-[11px] uppercase tracking-wider">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-white/[0.08] text-zinc-400 font-bold text-[11px] uppercase tracking-wider">
             <span className="flex items-center gap-1.5 text-white">
-              <Settings className="w-3.5 h-3.5 text-[#BF94FF]" />
+              <Settings className="w-3.5 h-3.5 text-[#FF9966]" />
               <span>Playback Settings</span>
             </span>
             <button onClick={onClose} className="hover:text-white transition-colors">
@@ -96,7 +96,7 @@ export const PlayerSettingsMenu: React.FC<PlayerSettingsMenuProps> = ({
           {/* Speed Row */}
           <button
             onClick={() => setSubMenu('speed')}
-            className="w-full flex items-center justify-between px-2.5 py-2 hover:bg-[#26262C] rounded-lg transition-colors text-left"
+            className="w-full flex items-center justify-between px-2.5 py-2 hover:bg-[#242731] rounded-xl transition-colors text-left"
           >
             <span className="flex items-center gap-2">
               <Gauge className="w-3.5 h-3.5 text-[#ADADB8]" />
