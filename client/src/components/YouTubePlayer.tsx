@@ -1,13 +1,31 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SyncState, Role } from '../types';
 import { getSocket } from '../services/socket';
-import { RefreshCw, Play, Pause, AlertCircle, ShieldCheck } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  RefreshCw,
+  Share2,
+  Check,
+  AlertCircle,
+  Radio,
+  Film,
+  Send,
+  FastForward
+} from 'lucide-react';
+import { getTwitchUserColor } from '../utils/colors';
 
 interface YouTubePlayerProps {
   roomId: string;
   role: Role;
   syncState: SyncState | null;
   canControl: boolean;
+  hostName: string;
+  viewerCount: number;
   onRequestControlOpen: () => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
 }
@@ -24,6 +42,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   role,
   syncState,
   canControl,
+  hostName,
+  viewerCount,
   onRequestControlOpen,
   onNotification,
 }) => {
@@ -33,15 +53,23 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const isProgrammaticUpdateRef = useRef<boolean>(false);
   const programmaticTimeoutRef = useRef<any>(null);
 
-  const [playerStatus, setPlayerStatus] = useState<string>('Initializing player...');
   const [currentVideoId, setCurrentVideoId] = useState<string>('');
   const [isApiLoaded, setIsApiLoaded] = useState<boolean>(false);
+  const [duration, setDuration] = useState<number>(0);
+  const [localCurrentTime, setLocalCurrentTime] = useState<number>(0);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [volume, setVolume] = useState<number>(80);
+  const [isDraggingScrubber, setIsDraggingScrubber] = useState<boolean>(false);
+  const [scrubberValue, setScrubberValue] = useState<number>(0);
+  const [copied, setCopied] = useState<boolean>(false);
+  const [inlineVideoUrl, setInlineVideoUrl] = useState<string>('');
+
+  const socket = getSocket();
 
   // Helper to safely execute a programmatic update to the YT Player
   const executeProgrammaticUpdate = useCallback((updateFn: (player: any) => void) => {
     if (!playerRef.current || !isPlayerReadyRef.current) return;
-    
-    // Set flag to prevent echo loops
+
     isProgrammaticUpdateRef.current = true;
     if (programmaticTimeoutRef.current) {
       clearTimeout(programmaticTimeoutRef.current);
@@ -93,7 +121,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       videoId: initialVideo,
       playerVars: {
         autoplay: 0,
-        controls: canControl ? 1 : 0, // disable default controls for viewers/participants to avoid local desync
+        controls: 0, // Use our sleek custom Twitch control bar
         modestbranding: 1,
         rel: 0,
         origin: window.location.origin,
@@ -104,44 +132,26 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         onReady: (event: any) => {
           playerRef.current = event.target;
           isPlayerReadyRef.current = true;
-          setPlayerStatus('Player Ready');
+          setDuration(event.target.getDuration ? event.target.getDuration() : 0);
 
-          // If we already received syncState before player was ready, sync now
           if (syncState) {
             handleInitialSync(syncState);
           }
         },
         onStateChange: (event: any) => {
-          // ANTI-ECHO LOOP PROTECTION:
-          // Ignore state changes triggered programmatically via sync_state
-          if (isProgrammaticUpdateRef.current) {
-            return;
-          }
+          // Anti-echo loop protection
+          if (isProgrammaticUpdateRef.current) return;
+          if (!canControl) return;
 
-          // If participant or viewer somehow interacts locally, prevent it or warn
-          if (!canControl) {
-            return;
-          }
-
-          const socket = getSocket();
           const currentTime = playerRef.current ? playerRef.current.getCurrentTime() : 0;
-
           if (event.data === window.YT.PlayerState.PLAYING) {
             socket.emit('play', { roomId, currentTime });
-            setPlayerStatus('Playing');
           } else if (event.data === window.YT.PlayerState.PAUSED) {
             socket.emit('pause', { roomId, currentTime });
-            setPlayerStatus('Paused');
-          } else if (event.data === window.YT.PlayerState.BUFFERING) {
-            setPlayerStatus('Buffering');
           }
         },
-        onError: (e: any) => {
-          console.warn('YouTube Player error:', e);
-          setPlayerStatus('Playback error / Video unavailable');
-          if (onNotification) {
-            onNotification('YouTube video cannot be embedded or is unavailable', 'error');
-          }
+        onError: () => {
+          onNotification?.('YouTube video cannot be embedded or is unavailable', 'error');
         },
       },
     });
@@ -170,10 +180,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
       if (state.playState === 'playing') {
         player.playVideo();
-        setPlayerStatus('Playing');
       } else {
         player.pauseVideo();
-        setPlayerStatus('Paused');
       }
     });
   };
@@ -181,7 +189,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   // 3. React to sync_state updates with DRIFT COMPENSATION
   useEffect(() => {
     if (!syncState || !playerRef.current || !isPlayerReadyRef.current) return;
-
     const player = playerRef.current;
 
     executeProgrammaticUpdate((p) => {
@@ -194,111 +201,367 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         });
       }
 
-      // Handle Play / Pause / Drift compensation
+      // Drift compensation: only seek if drift > 1.2s
       const localTime = p.getCurrentTime ? p.getCurrentTime() : 0;
       const serverTime = syncState.currentTime;
       const drift = Math.abs(localTime - serverTime);
 
-      // Only seek if drift exceeds threshold (1.2 seconds) to avoid constant jitter
       if (drift > 1.2) {
         p.seekTo(serverTime, true);
       }
 
       const playerState = p.getPlayerState ? p.getPlayerState() : -1;
-
       if (syncState.playState === 'playing') {
         if (playerState !== window.YT.PlayerState.PLAYING) {
           p.playVideo();
         }
-        setPlayerStatus(`Playing @ ${formatTime(serverTime)}`);
       } else {
         if (playerState !== window.YT.PlayerState.PAUSED) {
           p.pauseVideo();
         }
-        setPlayerStatus(`Paused @ ${formatTime(serverTime)}`);
       }
     });
   }, [syncState, currentVideoId, executeProgrammaticUpdate]);
 
-  // Manual re-sync action
-  const handleManualResync = () => {
-    const socket = getSocket();
-    socket.emit('request_sync', { roomId });
-    if (onNotification) {
-      onNotification('Re-syncing with room host...', 'info');
+  // Periodic timer to update local progress scrubber when playing
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (playerRef.current && isPlayerReadyRef.current) {
+        const cur = playerRef.current.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
+        const dur = playerRef.current.getDuration ? playerRef.current.getDuration() : 0;
+        setLocalCurrentTime(cur);
+        if (dur > 0 && dur !== duration) {
+          setDuration(dur);
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [duration]);
+
+  // Controls Handlers
+  const handlePlayPause = () => {
+    if (!canControl) {
+      onRequestControlOpen();
+      return;
+    }
+
+    const isPlaying = syncState?.playState === 'playing';
+    if (isPlaying) {
+      socket.emit('pause', { roomId, currentTime: localCurrentTime });
+    } else {
+      socket.emit('play', { roomId, currentTime: localCurrentTime });
     }
   };
 
-  return (
-    <div className="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-2xl flex flex-col">
-      {/* 16:9 Video Container */}
-      <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
-        <div id="youtube-player-element" className="w-full h-full" />
+  const handleSkip = (seconds: number) => {
+    if (!canControl) {
+      onRequestControlOpen();
+      return;
+    }
+    const target = Math.max(0, localCurrentTime + seconds);
+    socket.emit('seek', { roomId, time: target });
+  };
 
-        {/* Protection Click-Overlay for Participants/Viewers to prevent accidental local desync */}
+  const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setScrubberValue(val);
+    setIsDraggingScrubber(true);
+  };
+
+  const handleScrubberCommit = () => {
+    if (!canControl) {
+      onNotification?.('Only Host or Moderator can scrub video. Request control to seek.', 'info');
+      setIsDraggingScrubber(false);
+      return;
+    }
+    socket.emit('seek', { roomId, time: scrubberValue });
+    setIsDraggingScrubber(false);
+  };
+
+  const handleToggleMute = () => {
+    if (!playerRef.current) return;
+    if (isMuted) {
+      playerRef.current.unMute();
+      playerRef.current.setVolume(volume);
+      setIsMuted(false);
+    } else {
+      playerRef.current.mute();
+      setIsMuted(true);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVol = parseInt(e.target.value, 10);
+    setVolume(newVol);
+    if (playerRef.current) {
+      if (newVol === 0) {
+        playerRef.current.mute();
+        setIsMuted(true);
+      } else {
+        playerRef.current.unMute();
+        playerRef.current.setVolume(newVol);
+        setIsMuted(false);
+      }
+    }
+  };
+
+  const handleManualResync = () => {
+    socket.emit('request_sync', { roomId });
+    onNotification?.('Re-syncing with Host stream clock...', 'info');
+  };
+
+  const handleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch((err) => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const copyShareInvite = () => {
+    const inviteUrl = `${window.location.origin}/?room=${roomId}`;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    onNotification?.('Invite link copied to clipboard!', 'success');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleInlineVideoSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inlineVideoUrl.trim()) return;
+
+    if (canControl) {
+      socket.emit('change_video', { roomId, videoId: inlineVideoUrl.trim() });
+      setInlineVideoUrl('');
+      onNotification?.('Changing video...', 'info');
+    } else {
+      socket.emit('request_control', {
+        roomId,
+        action: 'change_video',
+        payload: { videoId: inlineVideoUrl.trim() },
+        label: `Change video to ${inlineVideoUrl.trim()}`,
+      });
+      setInlineVideoUrl('');
+      onNotification?.('Video change requested from Host', 'info');
+    }
+  };
+
+  const isPlaying = syncState?.playState === 'playing';
+  const effectiveCurrentTime = isDraggingScrubber ? scrubberValue : localCurrentTime;
+  const progressPercent = duration > 0 ? (effectiveCurrentTime / duration) * 100 : 0;
+  const hostColor = getTwitchUserColor(hostName || 'Host');
+
+  return (
+    <div ref={containerRef} className="flex flex-col w-full bg-[#0E0E10] text-[#EFEFF1]">
+      {/* 1. 16:9 Black Video Theater Stage */}
+      <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden shadow-2xl">
+        <div id="youtube-player-element" className="w-full h-full pointer-events-none" />
+
+        {/* Click shield for participants/viewers to prevent accidental local desync */}
         {!canControl && (
           <div
             onClick={onRequestControlOpen}
-            title="Click to request control from Host"
-            className="absolute inset-0 z-10 cursor-pointer bg-transparent hover:bg-slate-950/20 transition-colors flex items-center justify-center group"
+            className="absolute inset-0 z-10 cursor-pointer bg-transparent hover:bg-black/30 transition-colors flex items-center justify-center group"
           >
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700 text-xs font-medium text-slate-200 shadow-xl flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400" />
-              <span>Participant mode (Synced with Host). Click to request control.</span>
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-[#18181B]/95 backdrop-blur-md px-3.5 py-2 rounded-lg border border-[#2F2F35] text-xs font-semibold text-white shadow-2xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#FFD700]" />
+              <span>Synced with Host. Click to request control.</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Sync Status Bar */}
-      <div className="px-4 py-2.5 bg-slate-900/95 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                syncState?.playState === 'playing' ? 'bg-emerald-400' : 'bg-amber-400'
-              }`}
-            ></span>
-            <span
-              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                syncState?.playState === 'playing' ? 'bg-emerald-500' : 'bg-amber-500'
-              }`}
-            ></span>
-          </span>
-          <span className="font-semibold text-slate-200">
-            {syncState?.playState === 'playing' ? 'In Sync • Playing' : 'In Sync • Paused'}
-          </span>
-          {syncState?.updatedBy && (
-            <span className="text-slate-400 hidden sm:inline">
-              (by <span className="text-slate-300 font-medium">{syncState.updatedBy}</span>)
-            </span>
-          )}
+      {/* 2. Custom Twitch-Style Control Bar (directly beneath player) */}
+      <div className="bg-[#18181B] border-b border-[#2F2F35] px-3 py-2 flex flex-col gap-2">
+        {/* Scrubber Track */}
+        <div className="relative flex items-center w-full group">
+          <div className="w-full h-1 bg-[#2F2F35] rounded-full overflow-hidden relative">
+            <div
+              className="h-full bg-[#9146FF] transition-all duration-100"
+              style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+            />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            step={0.5}
+            value={effectiveCurrentTime}
+            onChange={handleScrubberChange}
+            onMouseUp={handleScrubberCommit}
+            onTouchEnd={handleScrubberCommit}
+            disabled={!canControl}
+            className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 cursor-pointer disabled:cursor-not-allowed"
+          />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400 font-mono">
-            {formatTime(syncState?.currentTime || 0)}
-          </span>
-
-          <button
-            onClick={handleManualResync}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-xs font-medium border border-slate-700"
-            title="Force re-sync playback with server"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Re-sync</span>
-          </button>
-
-          {!canControl && (
+        {/* Controls Row */}
+        <div className="flex items-center justify-between text-xs">
+          {/* Left Controls */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={onRequestControlOpen}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 hover:text-red-200 border border-red-500/30 transition-all font-medium text-xs"
+              onClick={handlePlayPause}
+              className="p-1.5 hover:text-[#9146FF] text-white rounded transition-colors"
+              title={canControl ? (isPlaying ? 'Pause (Space)' : 'Play (Space)') : 'Request Play/Pause'}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
-              <span>Request Control</span>
+              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
             </button>
-          )}
+
+            {canControl && (
+              <>
+                <button
+                  onClick={() => handleSkip(-10)}
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
+                  title="Rewind 10s"
+                >
+                  -10s
+                </button>
+                <button
+                  onClick={() => handleSkip(15)}
+                  className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
+                  title="Forward 15s"
+                >
+                  +15s
+                </button>
+              </>
+            )}
+
+            {/* Volume */}
+            <div className="flex items-center gap-1.5 group/vol">
+              <button
+                onClick={handleToggleMute}
+                className="p-1 text-[#ADADB8] hover:text-white transition-colors"
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-16 h-1 bg-[#2F2F35] accent-[#9146FF] rounded appearance-none cursor-pointer"
+              />
+            </div>
+
+            {/* Live Synced Badge */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#9146FF]/20 border border-[#9146FF]/40 text-[#BF94FF] text-[10px] font-bold tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00F593] animate-pulse" />
+              <span>LIVE SYNCED</span>
+            </div>
+
+            {/* Time / Duration */}
+            <span className="font-mono text-[11px] text-[#ADADB8]">
+              {formatTime(effectiveCurrentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+
+          {/* Right Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleManualResync}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35] text-[11px] font-medium transition-colors"
+              title="Force re-align with room clock"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Re-sync</span>
+            </button>
+
+            <button
+              onClick={handleFullscreen}
+              className="p-1 text-[#ADADB8] hover:text-white transition-colors"
+              title="Toggle Fullscreen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* 3. Twitch Streamer Info Header (below control bar) */}
+      <div className="px-4 py-4 sm:px-6 bg-[#0E0E10] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Host & Title */}
+          <div className="flex items-start gap-3">
+            {/* Host Avatar with Live ring */}
+            <div className="relative shrink-0 mt-0.5">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-md ring-2 ring-[#9146FF] ring-offset-2 ring-offset-[#0E0E10]"
+                style={{ backgroundColor: hostColor }}
+              >
+                {hostName ? hostName.charAt(0).toUpperCase() : 'H'}
+              </div>
+              <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-[#EB0400] text-white text-[8px] font-black uppercase rounded shadow">
+                LIVE
+              </span>
+            </div>
+
+            <div>
+              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <span>YouTube Watch Party — {currentVideoId}</span>
+              </h2>
+              <div className="flex items-center gap-2 text-xs text-[#ADADB8] pt-0.5">
+                <span>Hosted by <span className="font-semibold text-white">{hostName || 'Host'}</span></span>
+                <span>•</span>
+                <span className="text-[#00F593] flex items-center gap-1">
+                  👥 {viewerCount} watching
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Share Invite Button */}
+          <button
+            onClick={copyShareInvite}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] text-xs font-semibold text-white transition-colors shadow-sm"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
+          </button>
+        </div>
+
+        {/* 4. Quick Inline Change Video Bar (Twitch Theater Style) */}
+        <form onSubmit={handleInlineVideoSubmit} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Film className="w-4 h-4 text-[#ADADB8] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={
+                canControl
+                  ? "Paste YouTube URLs to Change Video (e.g., https://youtu.be/...)"
+                  : "Paste YouTube URL to request video change from Host..."
+              }
+              value={inlineVideoUrl}
+              onChange={(e) => setInlineVideoUrl(e.target.value)}
+              className="w-full bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded pl-9 pr-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!inlineVideoUrl.trim()}
+            className={`px-4 py-2 rounded text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5 ${
+              canControl
+                ? 'bg-[#9146FF] hover:bg-[#772CE8] disabled:opacity-40 text-white'
+                : 'bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35]'
+            }`}
+          >
+            {canControl ? (
+              <>
+                <span>Change Video</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5 text-[#BF94FF]" />
+                <span>Request Video</span>
+              </>
+            )}
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -4,12 +4,10 @@ import { Participant, Role, SyncState, ControlRequest, ChatMessage } from './typ
 import { Lobby } from './components/Lobby';
 import { RoomHeader } from './components/RoomHeader';
 import { YouTubePlayer } from './components/YouTubePlayer';
-import { ControlsBar } from './components/ControlsBar';
-import { ApprovalBanner } from './components/ApprovalBanner';
 import { ParticipantsList } from './components/ParticipantsList';
 import { ChatBox } from './components/ChatBox';
 import { RequestControlModal } from './components/RequestControlModal';
-import { AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 
 export default function App() {
   const [inRoom, setInRoom] = useState(false);
@@ -22,15 +20,19 @@ export default function App() {
     }
     return id;
   });
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(() => {
+    return localStorage.getItem('watchsync_username') || 'Viewer';
+  });
   const [userRole, setUserRole] = useState<Role>('participant');
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [pendingRequests, setPendingRequests] = useState<ControlRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
 
-  // Notifications / Toast
+  // Bottom-right Toast Notifications
   const [notification, setNotification] = useState<{
     msg: string;
     type: 'info' | 'error' | 'success';
@@ -58,7 +60,7 @@ export default function App() {
     const socket = getSocket();
 
     socket.on('connect', () => {
-      console.log('Connected to WebSocket server with socketId:', socket.id);
+      console.log('Connected to WebSocket server:', socket.id);
     });
 
     socket.on('room_joined', (data: { roomId: string; userId: string; username: string; role: Role }) => {
@@ -68,11 +70,10 @@ export default function App() {
       setUsername(data.username);
       setUserRole(data.role);
 
-      // Update URL query param cleanly without reloading
       const newUrl = `${window.location.pathname}?room=${data.roomId}`;
       window.history.replaceState(null, '', newUrl);
 
-      showNotification(`Joined room ${data.roomId} as ${data.role}`, 'success');
+      showNotification(`Joined party ${data.roomId} as ${data.role.toUpperCase()}`, 'success');
     });
 
     socket.on('user_joined', (data: { username: string; userId: string; role: Role; participants: Participant[] }) => {
@@ -84,7 +85,7 @@ export default function App() {
 
     socket.on('user_left', (data: { username: string; userId: string; participants: Participant[] }) => {
       setParticipants(data.participants);
-      showNotification(`${data.username} left the room`, 'info');
+      showNotification(`${data.username} left the party`, 'info');
     });
 
     socket.on('sync_state', (state: SyncState) => {
@@ -95,15 +96,15 @@ export default function App() {
       setParticipants(data.participants);
       if (data.userId === currentUserId) {
         setUserRole(data.role);
-        showNotification(`Your role was updated to: ${data.role}`, 'success');
+        showNotification(`You were assigned role: ${data.role.toUpperCase()}`, 'success');
       } else {
-        showNotification(`${data.username} is now a ${data.role}`, 'info');
+        showNotification(`${data.username} is now ${data.role.toUpperCase()}`, 'info');
       }
     });
 
     socket.on('participant_removed', (data: { userId: string; username: string; participants: Participant[] }) => {
       setParticipants(data.participants);
-      showNotification(`${data.username} was removed from the party`, 'info');
+      showNotification(`${data.username} was removed from party`, 'info');
     });
 
     socket.on('kicked', (data: { message: string }) => {
@@ -115,7 +116,10 @@ export default function App() {
 
     socket.on('control_requested', (data: { request: ControlRequest; pendingRequests: ControlRequest[] }) => {
       setPendingRequests(data.pendingRequests || []);
-      showNotification(`${data.request.requesterName} requested: ${data.request.label || data.request.action}`, 'info');
+      showNotification(
+        `${data.request.requesterName} requested: ${data.request.label || data.request.action}`,
+        'info'
+      );
     });
 
     socket.on('pending_requests_sync', (requests: ControlRequest[]) => {
@@ -125,7 +129,7 @@ export default function App() {
     socket.on('control_request_resolved', (data: { requestId: string; approve: boolean; request: ControlRequest; pendingRequests: ControlRequest[] }) => {
       setPendingRequests(data.pendingRequests || []);
       showNotification(
-        `Request "${data.request?.label || data.request?.action}" was ${data.approve ? 'approved' : 'rejected'}`,
+        `Request "${data.request?.label || data.request?.action}" ${data.approve ? 'APPROVED' : 'DENIED'}`,
         data.approve ? 'success' : 'info'
       );
     });
@@ -180,120 +184,111 @@ export default function App() {
     setPendingRequests([]);
     setSyncState(null);
     window.history.replaceState(null, '', window.location.pathname);
-    showNotification('You left the room', 'info');
+    showNotification('You left the party', 'info');
   };
 
   const canControl = userRole === 'host' || userRole === 'moderator';
 
-  if (!inRoom) {
-    return (
-      <Lobby
-        onJoin={handleJoinOrCreate}
-        initialRoomCode={initialRoomCode}
-      />
-    );
-  }
+  // Find host participant name
+  const hostParticipant = participants.find((p) => p.role === 'host');
+  const hostName = hostParticipant ? hostParticipant.username : 'Host';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      {/* Toast Notification Banner */}
-      {notification && (
-        <div className="fixed top-16 right-4 z-50 animate-in slide-in-from-top duration-200">
-          <div
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-medium backdrop-blur-md ${
-              notification.type === 'error'
-                ? 'bg-red-950/90 text-red-200 border-red-800'
-                : notification.type === 'success'
-                ? 'bg-emerald-950/90 text-emerald-200 border-emerald-800'
-                : 'bg-slate-900/90 text-slate-200 border-slate-700'
-            }`}
-          >
-            {notification.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            ) : notification.type === 'success' ? (
-              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <Info className="w-4 h-4 text-sky-400 shrink-0" />
-            )}
-            <span>{notification.msg}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Top Header */}
+    <div className="h-screen w-screen flex flex-col bg-[#0E0E10] text-[#EFEFF1] font-sans overflow-hidden">
+      {/* 1. Twitch Top Navigation Bar (50px fixed) */}
       <RoomHeader
         roomId={roomId}
         userRole={userRole}
         username={username}
+        inRoom={inRoom}
+        canControl={canControl}
         onLeaveRoom={handleLeaveRoom}
+        onRequestControlOpen={() => setIsRequestModalOpen(true)}
         onNotification={showNotification}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
-        {/* Left Column: Player, Controls, and Approval Banner (70% on desktop) */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
-          {/* Host/Mod Pending Approval Banner */}
-          {canControl && (
-            <ApprovalBanner
-              roomId={roomId}
-              requests={pendingRequests}
-              onNotification={showNotification}
-            />
-          )}
-
-          {/* YouTube Video Player */}
-          <YouTubePlayer
+      {/* 2. Main Content View */}
+      {!inRoom ? (
+        <Lobby onJoin={handleJoinOrCreate} initialRoomCode={initialRoomCode} />
+      ) : (
+        /* 3-Column Twitch Theater Layout */
+        <div className="h-[calc(100vh-50px)] w-full flex flex-col lg:flex-row overflow-hidden">
+          {/* Column 1: Left Party Members Rail */}
+          <ParticipantsList
             roomId={roomId}
-            role={userRole}
-            syncState={syncState}
-            canControl={canControl}
-            onRequestControlOpen={() => setIsRequestModalOpen(true)}
+            participants={participants}
+            currentUserId={currentUserId}
+            currentUserRole={userRole}
+            isCollapsed={isLeftRailCollapsed}
+            onToggleCollapse={() => setIsLeftRailCollapsed(!isLeftRailCollapsed)}
             onNotification={showNotification}
           />
 
-          {/* Controls Bar */}
-          <ControlsBar
+          {/* Column 2: Center Stage Video Theater & Controls */}
+          <main className="flex-1 h-full overflow-y-auto bg-[#0E0E10] flex flex-col no-scrollbar">
+            <YouTubePlayer
+              roomId={roomId}
+              role={userRole}
+              syncState={syncState}
+              canControl={canControl}
+              hostName={hostName}
+              viewerCount={participants.length}
+              onRequestControlOpen={() => setIsRequestModalOpen(true)}
+              onNotification={showNotification}
+            />
+          </main>
+
+          {/* Column 3: Right Twitch Stream Chat */}
+          <ChatBox
             roomId={roomId}
-            role={userRole}
-            syncState={syncState}
-            canControl={canControl}
-            onRequestControlOpen={() => setIsRequestModalOpen(true)}
+            messages={messages}
+            currentUserId={currentUserId}
+            currentUserRole={userRole}
+            pendingRequests={pendingRequests}
+            isCollapsed={isChatCollapsed}
+            onToggleCollapse={() => setIsChatCollapsed(!isChatCollapsed)}
             onNotification={showNotification}
           />
         </div>
+      )}
 
-        {/* Right Column: Participants List & Room Chat (30% on desktop) */}
-        <div className="lg:col-span-4 flex flex-col gap-4 h-[650px] lg:h-auto">
-          {/* Top Half: Party Members */}
-          <div className="h-64 lg:h-72 shrink-0">
-            <ParticipantsList
-              roomId={roomId}
-              participants={participants}
-              currentUserId={currentUserId}
-              currentUserRole={userRole}
-              onNotification={showNotification}
-            />
-          </div>
-
-          {/* Bottom Half: Live Chat */}
-          <div className="flex-1 min-h-[300px]">
-            <ChatBox
-              roomId={roomId}
-              messages={messages}
-              currentUserId={currentUserId}
-            />
-          </div>
-        </div>
-      </main>
-
-      {/* Participant Request Control Modal */}
+      {/* Request Action / Control Modal for Participants */}
       <RequestControlModal
         isOpen={isRequestModalOpen}
         onClose={() => setIsRequestModalOpen(false)}
         roomId={roomId}
         onNotification={showNotification}
       />
+
+      {/* Toast Notification (Bottom-Right Corner) */}
+      {notification && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border shadow-2xl text-xs font-semibold backdrop-blur-md bg-[#18181B] ${
+              notification.type === 'error'
+                ? 'border-[#EB0400] text-[#FF4A4A]'
+                : notification.type === 'success'
+                ? 'border-[#00F593] text-[#00F593]'
+                : 'border-[#9146FF] text-[#BF94FF]'
+            }`}
+          >
+            {notification.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-[#EB0400] shrink-0" />
+            ) : notification.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-[#00F593] shrink-0" />
+            ) : (
+              <Info className="w-4 h-4 text-[#BF94FF] shrink-0" />
+            )}
+            <span>{notification.msg}</span>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-2 text-[#ADADB8] hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
