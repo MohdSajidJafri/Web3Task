@@ -65,6 +65,7 @@ async function runTests() {
   let hostSocket;
   let participantSocket;
   let viewerSocket;
+  let daveSocket;
   let createdRoomId;
 
   try {
@@ -273,10 +274,176 @@ async function runTests() {
     console.log(`  -> Room received participant_removed: ${green(removedData.username)}`);
     console.log(green('✔ TEST 5 PASSED: Host transfer and participant removal verified.'));
 
+    // -------------------------------------------------------------------------
+    // TEST 6: Shared Video Queue & Suggestions
+    // -------------------------------------------------------------------------
+    console.log(bold('\n[TEST 6] Testing Shared Video Queue & Suggestions...'));
+
+    // Bob (Host) adds a video to queue
+    let queueUpdatePromise = waitForEvent(hostSocket, 'queue_updated');
+    participantSocket.emit('queue_add', {
+      roomId: createdRoomId,
+      videoId: 'M7lc1UVf-VE',
+    });
+    let queueState = await queueUpdatePromise;
+    if (queueState.queue.length !== 1) {
+      throw new Error(`Expected queue length 1, got ${queueState.queue.length}`);
+    }
+    console.log(`  -> Video queued by Host: ${green(queueState.queue[0].title)}`);
+
+    // Alice (Moderator) suggests a video
+    queueUpdatePromise = waitForEvent(hostSocket, 'queue_updated');
+    hostSocket.emit('queue_suggest', {
+      roomId: createdRoomId,
+      videoId: 'https://youtu.be/dQw4w9WgXcQ',
+    });
+    queueState = await queueUpdatePromise;
+    if (queueState.suggestedQueue.length !== 1) {
+      throw new Error(`Expected suggestedQueue length 1, got ${queueState.suggestedQueue.length}`);
+    }
+    const suggestionId = queueState.suggestedQueue[0].id;
+    console.log(`  -> Suggestion submitted: ${green(queueState.suggestedQueue[0].title)} (ID: ${suggestionId})`);
+
+    // Bob approves the suggestion
+    queueUpdatePromise = waitForEvent(hostSocket, 'queue_updated');
+    participantSocket.emit('queue_approve_suggestion', {
+      roomId: createdRoomId,
+      suggestionId,
+    });
+    queueState = await queueUpdatePromise;
+    if (queueState.queue.length !== 2 || queueState.suggestedQueue.length !== 0) {
+      throw new Error(`Expected queue length 2 after approval, got ${queueState.queue.length}`);
+    }
+    console.log(`  -> Suggestion approved into official queue! Total queued: ${green(queueState.queue.length)}`);
+
+    // Bob triggers queue_next to play next video
+    const nextSyncPromise = waitForEvent(hostSocket, 'sync_state');
+    queueUpdatePromise = waitForEvent(hostSocket, 'queue_updated');
+    participantSocket.emit('queue_next', { roomId: createdRoomId });
+    const nextSync = await nextSyncPromise;
+    queueState = await queueUpdatePromise;
+    if (nextSync.videoId !== 'M7lc1UVf-VE') {
+      throw new Error(`Expected videoId to advance to 'M7lc1UVf-VE', got ${nextSync.videoId}`);
+    }
+    console.log(`  -> Advanced to next video in queue: ${green(nextSync.videoId)}, remaining in queue: ${queueState.queue.length}`);
+    console.log(green('✔ TEST 6 PASSED: Shared video queue & suggestions verified.'));
+
+    // -------------------------------------------------------------------------
+    // TEST 7: Room Lock (Host Toggle)
+    // -------------------------------------------------------------------------
+    console.log(bold('\n[TEST 7] Testing Room Lock controls...'));
+
+    // Bob locks the room
+    const lockUpdatePromise = waitForEvent(hostSocket, 'room_settings_updated');
+    participantSocket.emit('update_room_settings', {
+      roomId: createdRoomId,
+      isLocked: true,
+    });
+    const lockedSettings = await lockUpdatePromise;
+    if (!lockedSettings.isLocked) {
+      throw new Error('Expected isLocked to be true');
+    }
+    console.log(`  -> Room locked status: ${green(lockedSettings.isLocked)}`);
+
+    // New participant (Dave) attempts to join locked room -> rejected
+    daveSocket = createClient(serverUrl);
+    await waitForConnect(daveSocket);
+    const roomErrorPromise = waitForEvent(daveSocket, 'room_error');
+    daveSocket.emit('join_room', {
+      roomId: createdRoomId,
+      username: 'DaveStranger',
+      userId: 'user_dave_new',
+    });
+    const roomError = await roomErrorPromise;
+    console.log(`  -> Stranger rejected from locked room: ${green(roomError.message)}`);
+
+    // Bob unlocks room
+    const unlockUpdatePromise = waitForEvent(hostSocket, 'room_settings_updated');
+    participantSocket.emit('update_room_settings', {
+      roomId: createdRoomId,
+      isLocked: false,
+    });
+    await unlockUpdatePromise;
+    console.log(green('✔ TEST 7 PASSED: Room lock controls verified.'));
+
+    // -------------------------------------------------------------------------
+    // TEST 8: Open-Party Mode Controls (Host Toggle)
+    // -------------------------------------------------------------------------
+    console.log(bold('\n[TEST 8] Testing Open-Party Mode controls...'));
+
+    // Dave joins unlocked room as participant
+    const daveJoinPromise = waitForEvent(daveSocket, 'room_joined');
+    daveSocket.emit('join_room', {
+      roomId: createdRoomId,
+      username: 'DaveParticipant',
+      userId: 'user_dave',
+    });
+    await daveJoinPromise;
+    console.log(`  -> Dave joined as Participant`);
+
+    // Without Open Controls, Dave's pause is rejected
+    deniedPromise = waitForEvent(daveSocket, 'permission_denied');
+    daveSocket.emit('pause', { roomId: createdRoomId, currentTime: 20 });
+    denied = await deniedPromise;
+    console.log(`  -> Dave denied before Open Controls: ${green(denied.message)}`);
+
+    // Bob enables Open Controls
+    const openControlsPromise = waitForEvent(daveSocket, 'room_settings_updated');
+    participantSocket.emit('update_room_settings', {
+      roomId: createdRoomId,
+      isOpenControl: true,
+    });
+    const openSettings = await openControlsPromise;
+    if (!openSettings.isOpenControl) {
+      throw new Error('Expected isOpenControl to be true');
+    }
+
+    // Now Dave (Participant) executes pause directly!
+    const davePauseSyncPromise = waitForEvent(hostSocket, 'sync_state');
+    daveSocket.emit('pause', { roomId: createdRoomId, currentTime: 25 });
+    const davePauseSync = await davePauseSyncPromise;
+    if (davePauseSync.playState !== 'paused') {
+      throw new Error(`Expected paused playState, got ${davePauseSync.playState}`);
+    }
+    console.log(`  -> Dave (Participant) executed pause under Open Controls: ${green(davePauseSync.playState)}`);
+
+    // Revert Open Controls
+    participantSocket.emit('update_room_settings', {
+      roomId: createdRoomId,
+      isOpenControl: false,
+    });
+    console.log(green('✔ TEST 8 PASSED: Open-Party Mode controls verified.'));
+
+    // -------------------------------------------------------------------------
+    // TEST 9: Session Reconnection Grace Period
+    // -------------------------------------------------------------------------
+    console.log(bold('\n[TEST 9] Testing Session Reconnection Grace Period...'));
+
+    // Dave disconnects
+    daveSocket.disconnect();
+    console.log(`  -> Dave socket disconnected (grace period active)`);
+
+    // Within grace period, Dave connects a new socket with the same userId: 'user_dave'
+    const newDaveSocket = createClient(serverUrl);
+    await waitForConnect(newDaveSocket);
+    const reconnectPromise = waitForEvent(newDaveSocket, 'room_joined');
+    newDaveSocket.emit('join_room', {
+      roomId: createdRoomId,
+      username: 'DaveParticipant',
+      userId: 'user_dave',
+    });
+    const reconnectData = await reconnectPromise;
+    if (reconnectData.userId !== 'user_dave') {
+      throw new Error(`Expected userId 'user_dave', got ${reconnectData.userId}`);
+    }
+    console.log(`  -> Dave seamlessly reconnected with restored session: ${green(reconnectData.role)}`);
+    console.log(green('✔ TEST 9 PASSED: Session reconnection grace period verified.'));
+
     console.log(bold('\n======================================================'));
-    console.log(bold(green('  ALL 5 E2E TESTS PASSED SUCCESSFULLY! (100%)')));
+    console.log(bold(green('  ALL 9 E2E TESTS PASSED SUCCESSFULLY! (100%)')));
     console.log(bold('======================================================\n'));
 
+    newDaveSocket.disconnect();
   } catch (err) {
     console.error(bold(red(`\n✖ E2E TEST FAILED: ${err.message}`)));
     console.error(err);
@@ -285,6 +452,7 @@ async function runTests() {
     if (hostSocket) hostSocket.disconnect();
     if (participantSocket) participantSocket.disconnect();
     if (viewerSocket) viewerSocket.disconnect();
+    if (daveSocket) daveSocket.disconnect();
     server.close();
   }
 }

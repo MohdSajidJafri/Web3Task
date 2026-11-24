@@ -15,20 +15,21 @@
 1. **Object-Oriented Backend Architecture (OOP Bonus)**:
    - Clean domain encapsulation with `Participant`, `Room`, `RoomManager`, and `WebSocketHandler`.
    - Authoritative state storage with `getLiveCurrentTime()` accounting for elapsed real-time playback so late joiners sync with sub-second precision.
-2. **Strict Server-Side Role-Based Access Control (RBAC)**:
+2. **Shared Video Queue & Participant Suggestions**:
+   - Up Next playlist with real-time oEmbed YouTube title resolution, Play Now, Reordering, and Auto-Play when video ends.
+   - Participant video suggestion workflow with 1-click Host/Moderator approval.
+3. **Strict Server-Side Role-Based Access Control (RBAC)**:
    - Enforces four distinct roles: `Host` (Admin), `Moderator`, `Participant`, and `Viewer`.
-   - Unauthorized playback mutations (`play`, `pause`, `seek`, `change_video`) from non-privileged sockets are rejected server-side with `permission_denied` events.
-3. **Participant Action Request & Approval Workflow (PDF Page 4)**:
-   - Participants can submit action requests (`play`, `pause`, `seek`, `change_video`, or request temporary Moderator role).
-   - Hosts and Moderators receive instant real-time alerts and can Approve or Reject with a single click.
-4. **Resilient YouTube IFrame Sync & Anti-Echo Loop Protection**:
-   - `isProgrammaticUpdate` flag prevents local iframe state changes from bouncing back and creating infinite network feedback loops.
-   - Drift compensation threshold (> 1.2s) prevents video stutter from normal network jitter.
-   - Click-overlay protects Participants from accidentally desyncing themselves locally.
-5. **Single-Port Production Deployment**:
-   - Express serves the bundled React client from `client/dist` alongside the Socket.IO server on a unified port. Includes SPA fallback routing and `/api/health`.
-6. **100% Automated E2E Test Suite**:
-   - Self-contained test harness (`npm test`) using `socket.io-client` testing all 5 critical flows.
+   - Includes **Open-Party Mode** toggle allowing all participants to control playback when enabled by Host.
+4. **Room Lock Controls & Session Reconnect Grace Period**:
+   - Host can lock the room (`isLocked`) to prevent new participants from joining.
+   - 15-second server grace period maintains exact roles on brief network drops or page refreshes (`sessionStorage`).
+5. **Real-Time Drift & Ping Telemetry & Keyboard Shortcuts**:
+   - Twitch-style telemetry health pill (`● SYNCED • 0.08s drift • 24ms`).
+   - Floating live animated emoji reactions (`🔥`, `😂`, `😱`, `💜`, `👏`).
+   - Clickable chat timestamps (`@MM:SS`) and global keyboard shortcuts (`Space`, `ArrowLeft/Right`, `M`, `F`, `C`).
+6. **100% Automated E2E Test Suite (9 Tests)**:
+   - Self-contained test harness (`npm test`) using `socket.io-client` testing all 9 critical flows.
 
 ---
 

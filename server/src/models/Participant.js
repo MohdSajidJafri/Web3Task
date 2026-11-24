@@ -32,14 +32,16 @@ export class Participant {
   /**
    * Checks if participant has permission to control video playback (play, pause, seek, change video).
    * Host and Moderator are granted playback control.
+   * If isOpenControl is true (Open-Party Mode), participants are also allowed.
+   * @param {boolean} [isOpenControl=false]
    * @returns {boolean}
    */
-  canControlPlayback() {
-    return this.role === 'host' || this.role === 'moderator';
+  canControlPlayback(isOpenControl = false) {
+    return Boolean(isOpenControl) || this.role === 'host' || this.role === 'moderator';
   }
 
   /**
-   * Checks if participant has permission to manage room (assign roles, kick, transfer host).
+   * Checks if participant has permission to manage room (assign roles, kick, transfer host, lock room).
    * Host only.
    * @returns {boolean}
    */

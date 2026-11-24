@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { SyncState, Role } from '../types';
+import { SyncState, Role, LiveReaction } from '../types';
 import { getSocket } from '../services/socket';
 import {
   Play,
@@ -15,9 +15,15 @@ import {
   Radio,
   Film,
   Send,
-  FastForward
+  FastForward,
+  Lock,
+  Unlock,
+  Sliders,
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
+import { FloatingReactions } from './FloatingReactions';
 
 interface YouTubePlayerProps {
   roomId: string;
@@ -26,7 +32,12 @@ interface YouTubePlayerProps {
   canControl: boolean;
   hostName: string;
   viewerCount: number;
+  reactions: LiveReaction[];
+  pingMs: number;
+  isLocked: boolean;
+  isOpenControl: boolean;
   onRequestControlOpen: () => void;
+  onPlaybackTimeUpdate?: (time: number) => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
 }
 
@@ -44,7 +55,12 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   canControl,
   hostName,
   viewerCount,
+  reactions,
+  pingMs,
+  isLocked,
+  isOpenControl,
   onRequestControlOpen,
+  onPlaybackTimeUpdate,
   onNotification,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +73,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const [isApiLoaded, setIsApiLoaded] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
   const [localCurrentTime, setLocalCurrentTime] = useState<number>(0);
+  const [driftSeconds, setDriftSeconds] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(80);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState<boolean>(false);
@@ -65,6 +82,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const [inlineVideoUrl, setInlineVideoUrl] = useState<string>('');
 
   const socket = getSocket();
+  const isHost = role === 'host';
 
   // Helper to safely execute a programmatic update to the YT Player
   const executeProgrammaticUpdate = useCallback((updateFn: (player: any) => void) => {
@@ -81,7 +99,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       console.error('Error executing programmatic player update', e);
     }
 
-    // Reset after 600ms debounce
     programmaticTimeoutRef.current = setTimeout(() => {
       isProgrammaticUpdateRef.current = false;
     }, 600);
@@ -121,7 +138,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       videoId: initialVideo,
       playerVars: {
         autoplay: 0,
-        controls: 0, // Use our sleek custom Twitch control bar
+        controls: 0,
         modestbranding: 1,
         rel: 0,
         origin: window.location.origin,
@@ -139,8 +156,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           }
         },
         onStateChange: (event: any) => {
-          // Anti-echo loop protection
           if (isProgrammaticUpdateRef.current) return;
+
+          // Video Ended -> Trigger auto next in queue
+          if (event.data === window.YT.PlayerState.ENDED) {
+            socket.emit('video_ended', { roomId });
+            return;
+          }
+
           if (!canControl) return;
 
           const currentTime = playerRef.current ? playerRef.current.getCurrentTime() : 0;
@@ -201,11 +224,13 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         });
       }
 
-      // Drift compensation: only seek if drift > 1.2s
+      // Drift calculation
       const localTime = p.getCurrentTime ? p.getCurrentTime() : 0;
       const serverTime = syncState.currentTime;
       const drift = Math.abs(localTime - serverTime);
+      setDriftSeconds(Math.round(drift * 100) / 100);
 
+      // Drift compensation: only seek if drift > 1.2s
       if (drift > 1.2) {
         p.seekTo(serverTime, true);
       }
@@ -223,21 +248,34 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     });
   }, [syncState, currentVideoId, executeProgrammaticUpdate]);
 
-  // Periodic timer to update local progress scrubber when playing
+  // Periodic timer for scrubber and drift calculation
   useEffect(() => {
     const timer = setInterval(() => {
       if (playerRef.current && isPlayerReadyRef.current) {
         const cur = playerRef.current.getCurrentTime ? playerRef.current.getCurrentTime() : 0;
         const dur = playerRef.current.getDuration ? playerRef.current.getDuration() : 0;
         setLocalCurrentTime(cur);
+        onPlaybackTimeUpdate?.(cur);
+
         if (dur > 0 && dur !== duration) {
           setDuration(dur);
+        }
+
+        // Live drift check if playing
+        if (syncState?.playState === 'playing') {
+          const elapsedSinceLastUpdate = (Date.now() - syncState.lastUpdatedAt) / 1000;
+          const expectedTime = syncState.currentTime + elapsedSinceLastUpdate;
+          const drift = Math.abs(cur - expectedTime);
+          setDriftSeconds(Math.round(drift * 100) / 100);
+        } else if (syncState) {
+          const drift = Math.abs(cur - syncState.currentTime);
+          setDriftSeconds(Math.round(drift * 100) / 100);
         }
       }
     }, 500);
 
     return () => clearInterval(timer);
-  }, [duration]);
+  }, [duration, syncState, onPlaybackTimeUpdate]);
 
   // Controls Handlers
   const handlePlayPause = () => {
@@ -330,6 +368,25 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Host Room Settings toggles
+  const handleToggleLock = () => {
+    if (!isHost) return;
+    socket.emit('update_room_settings', {
+      roomId,
+      isLocked: !isLocked,
+    });
+    onNotification?.(!isLocked ? 'Room is now locked to new joiners' : 'Room unlocked', 'info');
+  };
+
+  const handleToggleOpenControls = () => {
+    if (!isHost) return;
+    socket.emit('update_room_settings', {
+      roomId,
+      isOpenControl: !isOpenControl,
+    });
+    onNotification?.(!isOpenControl ? 'Open-Party Mode ON: All participants can control playback' : 'Restricted Controls Mode restored', 'info');
+  };
+
   const handleInlineVideoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inlineVideoUrl.trim()) return;
@@ -355,11 +412,21 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const progressPercent = duration > 0 ? (effectiveCurrentTime / duration) * 100 : 0;
   const hostColor = getTwitchUserColor(hostName || 'Host');
 
+  // Sync health pill status color
+  const getSyncColor = () => {
+    if (driftSeconds < 0.5) return 'text-[#00F593] border-[#00F593]/40 bg-[#00F593]/10';
+    if (driftSeconds <= 1.2) return 'text-[#FFD700] border-[#FFD700]/40 bg-[#FFD700]/10';
+    return 'text-[#EB0400] border-[#EB0400]/40 bg-[#EB0400]/10';
+  };
+
   return (
     <div ref={containerRef} className="flex flex-col w-full bg-[#0E0E10] text-[#EFEFF1]">
       {/* 1. 16:9 Black Video Theater Stage */}
       <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden shadow-2xl">
         <div id="youtube-player-element" className="w-full h-full pointer-events-none" />
+
+        {/* Floating Live Emoji Reactions Overlay */}
+        <FloatingReactions reactions={reactions} />
 
         {/* Click shield for participants/viewers to prevent accidental local desync */}
         {!canControl && (
@@ -416,14 +483,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 <button
                   onClick={() => handleSkip(-10)}
                   className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
-                  title="Rewind 10s"
+                  title="Rewind 10s (Left Arrow)"
                 >
                   -10s
                 </button>
                 <button
                   onClick={() => handleSkip(15)}
                   className="p-1 text-[#ADADB8] hover:text-white transition-colors text-[10px] font-mono"
-                  title="Forward 15s"
+                  title="Forward 15s (Right Arrow)"
                 >
                   +15s
                 </button>
@@ -435,7 +502,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <button
                 onClick={handleToggleMute}
                 className="p-1 text-[#ADADB8] hover:text-white transition-colors"
-                title={isMuted ? 'Unmute' : 'Mute'}
+                title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
               >
                 {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
@@ -461,8 +528,19 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             </span>
           </div>
 
-          {/* Right Controls */}
+          {/* Right Controls: Telemetry Health Pill & Fullscreen */}
           <div className="flex items-center gap-2">
+            {/* Sync Health & Ping Telemetry */}
+            <div
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold ${getSyncColor()}`}
+              title={`Live playback drift: ${driftSeconds}s | Server ping: ${pingMs}ms`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+              <span>{driftSeconds}s drift</span>
+              <span>•</span>
+              <span>{pingMs}ms</span>
+            </div>
+
             <button
               onClick={handleManualResync}
               className="flex items-center gap-1 px-2 py-1 rounded bg-[#1F1F23] hover:bg-[#26262C] text-[#ADADB8] hover:text-white border border-[#2F2F35] text-[11px] font-medium transition-colors"
@@ -475,7 +553,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             <button
               onClick={handleFullscreen}
               className="p-1 text-[#ADADB8] hover:text-white transition-colors"
-              title="Toggle Fullscreen"
+              title="Toggle Fullscreen (F)"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -488,7 +566,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Host & Title */}
           <div className="flex items-start gap-3">
-            {/* Host Avatar with Live ring */}
             <div className="relative shrink-0 mt-0.5">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-md ring-2 ring-[#9146FF] ring-offset-2 ring-offset-[#0E0E10]"
@@ -503,29 +580,77 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
             <div>
               <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <span>YouTube Watch Party — {currentVideoId}</span>
+                <span>{syncState?.videoTitle || `YouTube Watch Party — ${currentVideoId}`}</span>
               </h2>
-              <div className="flex items-center gap-2 text-xs text-[#ADADB8] pt-0.5">
+              <div className="flex items-center gap-2 text-xs text-[#ADADB8] pt-0.5 flex-wrap">
                 <span>Hosted by <span className="font-semibold text-white">{hostName || 'Host'}</span></span>
                 <span>•</span>
                 <span className="text-[#00F593] flex items-center gap-1">
                   👥 {viewerCount} watching
                 </span>
+
+                {/* Status Badges for Lock & Open Controls */}
+                {isLocked && (
+                  <span className="px-1.5 py-0.2 rounded bg-[#EB0400]/20 border border-[#EB0400]/40 text-[#FF4A4A] text-[10px] font-bold flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>LOCKED</span>
+                  </span>
+                )}
+                {isOpenControl && (
+                  <span className="px-1.5 py-0.2 rounded bg-[#00F593]/20 border border-[#00F593]/40 text-[#00F593] text-[10px] font-bold flex items-center gap-1">
+                    <Sliders className="w-2.5 h-2.5" />
+                    <span>OPEN CONTROLS</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Share Invite Button */}
-          <button
-            onClick={copyShareInvite}
-            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] text-xs font-semibold text-white transition-colors shadow-sm"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
-          </button>
+          {/* Right Action Buttons: Host Settings Toggles & Share */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {isHost && (
+              <>
+                {/* Lock Room Toggle */}
+                <button
+                  onClick={handleToggleLock}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-colors ${
+                    isLocked
+                      ? 'bg-[#EB0400]/20 border-[#EB0400] text-[#FF4A4A]'
+                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                  }`}
+                  title={isLocked ? 'Room is locked to new joiners. Click to unlock.' : 'Click to lock room from new joiners'}
+                >
+                  {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                  <span>{isLocked ? 'Locked' : 'Lock Room'}</span>
+                </button>
+
+                {/* Open Controls Toggle */}
+                <button
+                  onClick={handleToggleOpenControls}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-semibold transition-colors ${
+                    isOpenControl
+                      ? 'bg-[#00F593]/20 border-[#00F593] text-[#00F593]'
+                      : 'bg-[#1F1F23] hover:bg-[#26262C] border-[#2F2F35] text-[#ADADB8] hover:text-white'
+                  }`}
+                  title={isOpenControl ? 'All members can control playback. Click to restrict.' : 'Click to allow all participants to control video'}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>{isOpenControl ? 'Open Controls ON' : 'Open Controls'}</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={copyShareInvite}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F1F23] hover:bg-[#26262C] border border-[#2F2F35] text-xs font-semibold text-white transition-colors shadow-sm"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Link Copied!' : 'Share Invite'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* 4. Quick Inline Change Video Bar (Twitch Theater Style) */}
+        {/* 4. Quick Inline Change Video Bar */}
         <form onSubmit={handleInlineVideoSubmit} className="flex items-center gap-2">
           <div className="relative flex-1">
             <Film className="w-4 h-4 text-[#ADADB8] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -551,9 +676,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             }`}
           >
             {canControl ? (
-              <>
-                <span>Change Video</span>
-              </>
+              <span>Change Video</span>
             ) : (
               <>
                 <Send className="w-3.5 h-3.5 text-[#BF94FF]" />

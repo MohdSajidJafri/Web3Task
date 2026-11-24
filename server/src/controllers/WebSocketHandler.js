@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Participant } from '../models/Participant.js';
 import { roomManager } from '../services/RoomManager.js';
 import { extractYouTubeVideoId } from '../utils/youtube.js';
+import { fetchYouTubeTitle } from '../models/Room.js';
 
 export class WebSocketHandler {
   /**
@@ -17,7 +18,7 @@ export class WebSocketHandler {
    */
   handleConnection(socket) {
     // 1. Join Room
-    socket.on('join_room', ({ roomId, username, userId }) => {
+    socket.on('join_room', async ({ roomId, username, userId }) => {
       try {
         const cleanUsername = String(username || '').trim() || 'Anonymous';
         const cleanUserId = userId ? String(userId).trim() : crypto.randomUUID();
@@ -45,13 +46,24 @@ export class WebSocketHandler {
             return;
           }
 
-          // Check if user already in room (reconnection)
-          let participant = room.getParticipant(cleanUserId);
-          if (participant) {
-            participant.updateSocketId(socket.id);
-            participant.username = cleanUsername;
+          // Check if room is locked and user is NOT an existing participant reconnecting
+          const existingParticipant = room.getParticipant(cleanUserId);
+          const isReconnecting = Boolean(existingParticipant || room.hasPendingGracePeriod(cleanUserId));
+
+          if (room.isLocked && !isReconnecting) {
+            socket.emit('room_error', { message: 'This room is locked by the host.' });
+            socket.emit('error', { message: 'This room is locked by the host.' });
+            return;
+          }
+
+          // Cancel any pending disconnect grace timer if reconnecting
+          room.cancelDisconnect(cleanUserId);
+
+          if (existingParticipant) {
+            existingParticipant.updateSocketId(socket.id);
+            existingParticipant.username = cleanUsername;
           } else {
-            participant = new Participant({
+            const participant = new Participant({
               userId: cleanUserId,
               socketId: socket.id,
               username: cleanUsername,
@@ -75,13 +87,21 @@ export class WebSocketHandler {
           username: currentParticipant.username,
           role: currentParticipant.role,
           isCreator,
+          isLocked: room.isLocked,
+          isOpenControl: room.isOpenControl,
         });
 
         // Send authoritative sync state to joiner
         socket.emit('sync_state', room.getSyncState());
 
+        // Send queue state to joiner
+        socket.emit('queue_updated', room.getQueueState());
+
+        // Send room settings
+        socket.emit('room_settings_updated', room.getSettings());
+
         // Send active pending requests if user is host or moderator
-        if (currentParticipant.canControlPlayback()) {
+        if (currentParticipant.canControlPlayback(room.isOpenControl)) {
           socket.emit('pending_requests_sync', room.getPendingRequestsList());
         }
 
@@ -108,7 +128,7 @@ export class WebSocketHandler {
       return { room, participant, userId: participant?.userId };
     };
 
-    // 2. Leave Room
+    // 2. Leave Room (explicit exit cancels grace period)
     socket.on('leave_room', ({ roomId }) => {
       try {
         const ctx = getContext(roomId);
@@ -117,11 +137,11 @@ export class WebSocketHandler {
         const { room, participant } = ctx;
         const wasHost = participant.role === 'host';
 
+        room.cancelDisconnect(participant.userId);
         room.removeParticipant(participant.userId);
         socket.leave(room.roomId);
         socket.data.roomId = null;
 
-        // If host left, elect new host if room still has members
         if (wasHost && !room.isEmpty()) {
           const newHost = room.handleHostDisconnect(participant.userId);
           if (newHost) {
@@ -151,7 +171,7 @@ export class WebSocketHandler {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      if (!ctx.participant.canControlPlayback()) {
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
         socket.emit('permission_denied', {
           action: 'play',
           message: 'Permission denied: Only Host or Moderator can control playback. Use "Request Control" instead.',
@@ -167,7 +187,7 @@ export class WebSocketHandler {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      if (!ctx.participant.canControlPlayback()) {
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
         socket.emit('permission_denied', {
           action: 'pause',
           message: 'Permission denied: Only Host or Moderator can control playback. Use "Request Control" instead.',
@@ -183,7 +203,7 @@ export class WebSocketHandler {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      if (!ctx.participant.canControlPlayback()) {
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
         socket.emit('permission_denied', {
           action: 'seek',
           message: 'Permission denied: Only Host or Moderator can scrub/seek video. Use "Request Control" instead.',
@@ -195,11 +215,11 @@ export class WebSocketHandler {
       this.io.to(ctx.room.roomId).emit('sync_state', syncState);
     });
 
-    socket.on('change_video', ({ roomId, videoId } = {}) => {
+    socket.on('change_video', async ({ roomId, videoId } = {}) => {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      if (!ctx.participant.canControlPlayback()) {
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
         socket.emit('permission_denied', {
           action: 'change_video',
           message: 'Permission denied: Only Host or Moderator can change the video. Use "Request Control" instead.',
@@ -213,16 +233,211 @@ export class WebSocketHandler {
         return;
       }
 
-      const syncState = ctx.room.setVideo(cleanVideoId, ctx.participant.username);
+      const title = await fetchYouTubeTitle(cleanVideoId);
+      const syncState = ctx.room.setVideo(cleanVideoId, ctx.participant.username, title);
       this.io.to(ctx.room.roomId).emit('sync_state', syncState);
     });
 
-    // 4. Request Control / Approval Workflow
+    // 4. SHARED QUEUE & SUGGESTIONS EVENTS
+    socket.on('queue_add', async ({ roomId, videoId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_add',
+          message: 'Permission denied: Only Host or Moderator can add directly to the queue. Use Suggest instead.',
+        });
+        return;
+      }
+
+      const cleanVideoId = extractYouTubeVideoId(videoId);
+      if (!cleanVideoId) {
+        socket.emit('error', { message: 'Invalid YouTube link or Video ID' });
+        return;
+      }
+
+      const title = await fetchYouTubeTitle(cleanVideoId);
+      ctx.room.addToQueue({
+        videoId: cleanVideoId,
+        title,
+        addedBy: ctx.participant.username,
+        addedByRole: ctx.participant.role,
+      });
+
+      this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+    });
+
+    socket.on('queue_suggest', async ({ roomId, videoId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      const cleanVideoId = extractYouTubeVideoId(videoId);
+      if (!cleanVideoId) {
+        socket.emit('error', { message: 'Invalid YouTube link or Video ID' });
+        return;
+      }
+
+      const title = await fetchYouTubeTitle(cleanVideoId);
+      ctx.room.addToSuggestedQueue({
+        videoId: cleanVideoId,
+        title,
+        suggestedBy: ctx.participant.username,
+        suggestedById: ctx.participant.userId,
+      });
+
+      this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+      socket.emit('suggestion_submitted', { message: 'Your video suggestion was submitted to Host and Mods!' });
+    });
+
+    socket.on('queue_approve_suggestion', ({ roomId, suggestionId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_approve_suggestion',
+          message: 'Permission denied: Only Host or Moderator can approve video suggestions.',
+        });
+        return;
+      }
+
+      const item = ctx.room.approveSuggestion(suggestionId);
+      if (item) {
+        this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+      }
+    });
+
+    socket.on('queue_reject_suggestion', ({ roomId, suggestionId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_reject_suggestion',
+          message: 'Permission denied: Only Host or Moderator can reject video suggestions.',
+        });
+        return;
+      }
+
+      ctx.room.rejectSuggestion(suggestionId);
+      this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+    });
+
+    socket.on('queue_remove', ({ roomId, itemId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_remove',
+          message: 'Permission denied: Only Host or Moderator can remove items from queue.',
+        });
+        return;
+      }
+
+      ctx.room.removeFromQueue(itemId);
+      this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+    });
+
+    socket.on('queue_reorder', ({ roomId, fromIndex, toIndex } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_reorder',
+          message: 'Permission denied: Only Host or Moderator can reorder the queue.',
+        });
+        return;
+      }
+
+      ctx.room.reorderQueue(Number(fromIndex), Number(toIndex));
+      this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+    });
+
+    socket.on('queue_next', ({ roomId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        socket.emit('permission_denied', {
+          action: 'queue_next',
+          message: 'Permission denied: Only Host or Moderator can skip to next video in queue.',
+        });
+        return;
+      }
+
+      const nextItem = ctx.room.playNextInQueue(ctx.participant.username);
+      if (nextItem) {
+        this.io.to(ctx.room.roomId).emit('sync_state', ctx.room.getSyncState(ctx.participant.username));
+        this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+      }
+    });
+
+    socket.on('video_ended', ({ roomId } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      // Only authoritative controller triggers auto-advance to prevent multiple triggers
+      if (ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
+        if (ctx.room.queue.length > 0) {
+          const nextItem = ctx.room.playNextInQueue('Auto-Play');
+          if (nextItem) {
+            this.io.to(ctx.room.roomId).emit('sync_state', ctx.room.getSyncState('Auto-Play'));
+            this.io.to(ctx.room.roomId).emit('queue_updated', ctx.room.getQueueState());
+          }
+        }
+      }
+    });
+
+    // 5. FLOATING LIVE REACTIONS
+    socket.on('send_reaction', ({ roomId, emoji } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      const cleanEmoji = String(emoji || '').slice(0, 10);
+      if (!cleanEmoji) return;
+
+      this.io.to(ctx.room.roomId).emit('reaction_received', {
+        id: crypto.randomUUID(),
+        emoji: cleanEmoji,
+        username: ctx.participant.username,
+        timestamp: Date.now(),
+      });
+    });
+
+    // 6. ROOM SETTINGS (LOCK & OPEN CONTROLS)
+    socket.on('update_room_settings', ({ roomId, isLocked, isOpenControl } = {}) => {
+      const ctx = getContext(roomId);
+      if (!ctx || !ctx.room || !ctx.participant) return;
+
+      if (!ctx.participant.canManageRoom()) {
+        socket.emit('permission_denied', {
+          action: 'update_room_settings',
+          message: 'Permission denied: Only the Host can update room settings.',
+        });
+        return;
+      }
+
+      const settings = ctx.room.updateSettings({ isLocked, isOpenControl });
+      this.io.to(ctx.room.roomId).emit('room_settings_updated', settings);
+      this.io.to(ctx.room.roomId).emit('sync_state', ctx.room.getSyncState(ctx.participant.username));
+    });
+
+    // 7. TELEMETRY PING / PONG
+    socket.on('ping_check', ({ timestamp } = {}) => {
+      socket.emit('pong_check', {
+        clientTimestamp: timestamp || Date.now(),
+        serverTimestamp: Date.now(),
+      });
+    });
+
+    // 8. Request Control / Approval Workflow
     socket.on('request_control', ({ roomId, action, payload, label } = {}) => {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      // If action is change_video, validate videoId format in payload
       let processedPayload = payload;
       if (action === 'change_video' && payload?.videoId) {
         const cleanId = extractYouTubeVideoId(payload.videoId);
@@ -241,10 +456,8 @@ export class WebSocketHandler {
         label,
       });
 
-      // Notify the requester that the request was submitted
       socket.emit('control_request_submitted', { request });
 
-      // Notify Host and Moderators with the new request and full pending list
       this.io.to(ctx.room.roomId).emit('control_requested', {
         request,
         pendingRequests: ctx.room.getPendingRequestsList(),
@@ -255,8 +468,7 @@ export class WebSocketHandler {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
 
-      // Only Host or Moderator can approve/reject control requests
-      if (!ctx.participant.canControlPlayback()) {
+      if (!ctx.participant.canControlPlayback(ctx.room.isOpenControl)) {
         socket.emit('permission_denied', {
           action: 'respond_control',
           message: 'Permission denied: Only Host or Moderator can resolve participant requests.',
@@ -267,7 +479,6 @@ export class WebSocketHandler {
       try {
         const result = ctx.room.resolveControlRequest(requestId, Boolean(approve));
 
-        // Broadcast resolution to entire room
         this.io.to(ctx.room.roomId).emit('control_request_resolved', {
           requestId,
           approve: Boolean(approve),
@@ -275,12 +486,10 @@ export class WebSocketHandler {
           pendingRequests: ctx.room.getPendingRequestsList(),
         });
 
-        // If approved and syncState was updated (e.g. video changed or playback updated)
         if (result.syncState) {
           this.io.to(ctx.room.roomId).emit('sync_state', result.syncState);
         }
 
-        // If approved and a role was updated (e.g. participant promoted to moderator)
         if (result.updatedParticipant) {
           this.io.to(ctx.room.roomId).emit('role_assigned', {
             userId: result.updatedParticipant.userId,
@@ -294,7 +503,7 @@ export class WebSocketHandler {
       }
     });
 
-    // 5. Host Management Events (Assign Role, Remove Participant, Transfer Host)
+    // 9. Host Management Events (Assign Role, Remove Participant, Transfer Host)
     socket.on('assign_role', ({ roomId, userId, role } = {}) => {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
@@ -348,7 +557,6 @@ export class WebSocketHandler {
         return;
       }
 
-      // Notify the target socket directly that they have been kicked
       const targetSocket = this.io.sockets.sockets.get(target.socketId);
       if (targetSocket) {
         targetSocket.emit('kicked', { message: 'You have been removed from the room by the host.' });
@@ -390,7 +598,7 @@ export class WebSocketHandler {
       }
     });
 
-    // 6. Bonus Real-Time Chat
+    // 10. Real-Time Chat
     socket.on('chat_message', ({ roomId, text } = {}) => {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room || !ctx.participant) return;
@@ -411,14 +619,15 @@ export class WebSocketHandler {
       this.io.to(ctx.room.roomId).emit('chat_message', message);
     });
 
-    // 7. Request Sync (Manual Re-sync from client)
+    // 11. Request Sync
     socket.on('request_sync', ({ roomId } = {}) => {
       const ctx = getContext(roomId);
       if (!ctx || !ctx.room) return;
       socket.emit('sync_state', ctx.room.getSyncState());
+      socket.emit('queue_updated', ctx.room.getQueueState());
     });
 
-    // 8. Disconnect handling
+    // 12. Disconnect with 15-second grace period
     socket.on('disconnect', () => {
       try {
         const room = roomManager.getRoomBySocketId(socket.id);
@@ -427,28 +636,33 @@ export class WebSocketHandler {
         const participant = room.getParticipantBySocketId(socket.id);
         if (!participant) return;
 
+        const targetUserId = participant.userId;
         const wasHost = participant.role === 'host';
-        room.removeParticipant(participant.userId);
 
-        if (wasHost && !room.isEmpty()) {
-          const newHost = room.handleHostDisconnect(participant.userId);
-          if (newHost) {
-            this.io.to(room.roomId).emit('role_assigned', {
-              userId: newHost.userId,
-              username: newHost.username,
-              role: newHost.role,
-              participants: room.getParticipantsList(),
-            });
+        // 15-second grace period before actual removal and host re-election
+        room.scheduleDisconnect(targetUserId, () => {
+          room.removeParticipant(targetUserId);
+
+          if (wasHost && !room.isEmpty()) {
+            const newHost = room.handleHostDisconnect(targetUserId);
+            if (newHost) {
+              this.io.to(room.roomId).emit('role_assigned', {
+                userId: newHost.userId,
+                username: newHost.username,
+                role: newHost.role,
+                participants: room.getParticipantsList(),
+              });
+            }
           }
-        }
 
-        this.io.to(room.roomId).emit('user_left', {
-          username: participant.username,
-          userId: participant.userId,
-          participants: room.getParticipantsList(),
-        });
+          this.io.to(room.roomId).emit('user_left', {
+            username: participant.username,
+            userId: targetUserId,
+            participants: room.getParticipantsList(),
+          });
 
-        roomManager.cleanupIfEmpty(room.roomId);
+          roomManager.cleanupIfEmpty(room.roomId);
+        }, 15000);
       } catch (err) {
         // Ignore disconnect errors
       }

@@ -72,3 +72,27 @@ input[type="range"]::-webkit-slider-runnable-track {
 .twitch-glow-subtle {
   box-shadow: 0 0 30px rgba(145, 70, 255, 0.12);
 }
+
+/* Floating Emoji Reaction Animation */
+@keyframes floatUpAndFade {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.2) rotate(-5deg);
+  }
+  75% {
+    opacity: 0.9;
+    transform: translateY(-160px) scale(1) rotate(5deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-240px) scale(0.8) rotate(0deg);
+  }
+}
+
+.animate-float-reaction {
+  animation: floatUpAndFade 2.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}

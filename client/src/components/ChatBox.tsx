@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Crown, Shield, Smile, Settings, Pin, Check, X, Users, ChevronRight, ChevronLeft } from 'lucide-react';
-import { ChatMessage, ControlRequest, Role } from '../types';
+import { Send, Crown, Shield, Smile, Settings, Pin, Check, X, Users, ChevronRight, ChevronLeft, Clock, Film } from 'lucide-react';
+import { ChatMessage, ControlRequest, Role, QueueItem, SuggestedItem } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
+import { QueuePanel } from './QueuePanel';
 
 interface ChatBoxProps {
   roomId: string;
@@ -10,8 +11,12 @@ interface ChatBoxProps {
   currentUserId: string;
   currentUserRole: Role;
   pendingRequests: ControlRequest[];
+  queue: QueueItem[];
+  suggestedQueue: SuggestedItem[];
+  currentPlaybackTime: number;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onSeekToTime?: (time: number) => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
 }
 
@@ -21,10 +26,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   currentUserId,
   currentUserRole,
   pendingRequests,
+  queue,
+  suggestedQueue,
+  currentPlaybackTime,
   isCollapsed = false,
   onToggleCollapse,
+  onSeekToTime,
   onNotification,
 }) => {
+  const [activeTab, setActiveTab] = useState<'chat' | 'queue'>('chat');
   const [inputText, setInputText] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -33,8 +43,10 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const canApprove = currentUserRole === 'host' || currentUserRole === 'moderator';
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (activeTab === 'chat') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, activeTab]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +62,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   };
 
   const handleQuickReaction = (reaction: string) => {
+    // 1. Emit live floating reaction
+    socket.emit('send_reaction', {
+      roomId,
+      emoji: reaction,
+    });
+    // 2. Also emit to chat
     socket.emit('chat_message', {
       roomId,
       text: reaction,
@@ -66,6 +84,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
       approve ? 'Request approved!' : 'Request denied.',
       approve ? 'success' : 'info'
     );
+  };
+
+  const handleDropTimestamp = () => {
+    const formatted = formatTime(currentPlaybackTime);
+    setInputText((prev) => `${prev ? prev + ' ' : ''}@${formatted} `);
   };
 
   const renderRoleBadge = (role: Role) => {
@@ -89,7 +112,44 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     }
   };
 
-  const quickEmojis = ['🔥', '😂', '👏', '💜', 'GG', '🎉', '👀', '💯'];
+  // Helper to parse @MM:SS or @HH:MM:SS timestamps in chat into clickable seek pills
+  const renderMessageWithTimestamps = (text: string) => {
+    const timestampRegex = /@(\d{1,2}:\d{2}(?::\d{2})?)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = timestampRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+
+      const timeStr = match[1];
+      const seconds = parseTimeToSeconds(timeStr);
+
+      parts.push(
+        <button
+          key={match.index}
+          onClick={() => onSeekToTime && onSeekToTime(seconds)}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#9146FF]/30 hover:bg-[#9146FF] text-[#BF94FF] hover:text-white font-mono font-bold text-[10px] mx-0.5 transition-colors cursor-pointer select-none"
+          title={`Seek video to ${timeStr}`}
+        >
+          <Clock className="w-2.5 h-2.5" />
+          <span>{timeStr}</span>
+        </button>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts;
+  };
+
+  const quickEmojis = ['🔥', '😂', '😱', '💜', '👏', 'GG', '🎉', '👀'];
 
   if (isCollapsed) {
     return (
@@ -111,8 +171,34 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
   return (
     <aside className="w-[340px] bg-[#18181B] border-l border-[#2F2F35] flex flex-col h-full overflow-hidden select-none shrink-0">
-      {/* Top Header */}
-      <div className="h-10 px-3 border-b border-[#2F2F35] flex items-center justify-between text-xs shrink-0">
+      {/* Top Header Switcher (Chat vs Queue) */}
+      <div className="h-10 px-2 border-b border-[#2F2F35] flex items-center justify-between text-xs shrink-0 bg-[#18181B]">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors ${
+              activeTab === 'chat'
+                ? 'bg-[#1F1F23] text-white border-b-2 border-[#9146FF]'
+                : 'text-[#ADADB8] hover:text-white'
+            }`}
+          >
+            Stream Chat
+          </button>
+          <button
+            onClick={() => setActiveTab('queue')}
+            className={`px-3 py-1.5 rounded font-bold text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1 ${
+              activeTab === 'queue'
+                ? 'bg-[#1F1F23] text-white border-b-2 border-[#9146FF]'
+                : 'text-[#ADADB8] hover:text-white'
+            }`}
+          >
+            <span>Queue</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-[#9146FF]/30 text-[#BF94FF] text-[9px] font-mono font-bold">
+              {queue.length}
+            </span>
+          </button>
+        </div>
+
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
@@ -122,172 +208,209 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
             <ChevronRight className="w-4 h-4" />
           </button>
         )}
-
-        <h3 className="font-bold text-[12px] text-white uppercase tracking-wider mx-auto">
-          STREAM CHAT
-        </h3>
-
-        <button className="p-1 text-[#ADADB8] hover:text-white rounded transition-colors">
-          <Users className="w-3.5 h-3.5" />
-        </button>
       </div>
 
-      {/* Pinned Approval Request Box (Twitch Theater Style from Reference) */}
-      {canApprove && pendingRequests.length > 0 && (
-        <div className="p-2.5 bg-[#1F1F23] border-b border-[#2F2F35] space-y-2 shrink-0">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5 text-[#BF94FF] font-bold text-[11px] uppercase tracking-wider">
-              <Pin className="w-3.5 h-3.5 text-[#9146FF] fill-current" />
-              <span>Control Request ({pendingRequests.length})</span>
-            </div>
-          </div>
-
-          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-            {pendingRequests.map((req) => (
-              <div
-                key={req.requestId}
-                className="bg-[#26262C] border-l-2 border-[#9146FF] rounded-r p-2 space-y-1.5"
-              >
-                <p className="text-xs text-white">
-                  <span className="font-bold text-[#FFD700]">{req.requesterName}</span>{' '}
-                  <span className="text-[#ADADB8]">wants to:</span>{' '}
-                  <span className="font-semibold text-white">{req.label || req.action}</span>
-                </p>
-
-                {req.action === 'change_video' && req.payload?.videoId && (
-                  <p className="text-[10px] font-mono text-[#BF94FF] truncate">
-                    Video: {req.payload.videoId}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 pt-0.5">
-                  <button
-                    onClick={() => handleRespondControl(req.requestId, true)}
-                    className="flex-1 py-1 px-2 rounded bg-[#00AD03] hover:bg-[#008A02] text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <Check className="w-3 h-3" />
-                    <span>Approve</span>
-                  </button>
-                  <button
-                    onClick={() => handleRespondControl(req.requestId, false)}
-                    className="flex-1 py-1 px-2 rounded bg-[#EB0400] hover:bg-[#C90300] text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Deny</span>
-                  </button>
+      {/* Render Active Tab */}
+      {activeTab === 'queue' ? (
+        <QueuePanel
+          roomId={roomId}
+          queue={queue}
+          suggestedQueue={suggestedQueue}
+          currentUserRole={currentUserRole}
+          canControl={canApprove}
+          onNotification={onNotification}
+        />
+      ) : (
+        <>
+          {/* Pinned Approval Request Box */}
+          {canApprove && pendingRequests.length > 0 && (
+            <div className="p-2.5 bg-[#1F1F23] border-b border-[#2F2F35] space-y-2 shrink-0">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 text-[#BF94FF] font-bold text-[11px] uppercase tracking-wider">
+                  <Pin className="w-3.5 h-3.5 text-[#9146FF] fill-current" />
+                  <span>Control Request ({pendingRequests.length})</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Chat Messages Feed */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs font-sans">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 text-[#ADADB8] space-y-1">
-            <span className="text-lg">💜</span>
-            <p className="text-xs font-semibold text-white">Welcome to the stream chat!</p>
-            <p className="text-[11px]">Say hello and chat with other party members in sync.</p>
-          </div>
-        ) : (
-          messages.map((m) => {
-            const userColor = getTwitchUserColor(m.username);
-            const timeStr = new Date(m.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            });
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                {pendingRequests.map((req) => (
+                  <div
+                    key={req.requestId}
+                    className="bg-[#26262C] border-l-2 border-[#9146FF] rounded-r p-2 space-y-1.5"
+                  >
+                    <p className="text-xs text-white">
+                      <span className="font-bold text-[#FFD700]">{req.requesterName}</span>{' '}
+                      <span className="text-[#ADADB8]">wants to:</span>{' '}
+                      <span className="font-semibold text-white">{req.label || req.action}</span>
+                    </p>
 
-            return (
-              <div key={m.id} className="leading-relaxed hover:bg-[#1F1F23]/60 -mx-2 px-2 py-0.5 rounded transition-colors break-words">
-                {/* Time */}
-                <span className="text-[#71717A] text-[10px] font-mono mr-1.5 select-none">
-                  {timeStr}
-                </span>
+                    {req.action === 'change_video' && req.payload?.videoId && (
+                      <p className="text-[10px] font-mono text-[#BF94FF] truncate">
+                        Video: {req.payload.videoId}
+                      </p>
+                    )}
 
-                {/* Role Badge (Crown / Sword) */}
-                <span className="inline-flex items-center align-middle mr-1">
-                  {renderRoleBadge(m.role)}
-                </span>
-
-                {/* Username */}
-                <span
-                  className="font-bold mr-1.5 hover:underline cursor-pointer"
-                  style={{ color: userColor }}
-                >
-                  {m.username}:
-                </span>
-
-                {/* Message Body */}
-                <span className="text-[#EFEFF1] text-xs selection:bg-[#9146FF]">
-                  {m.text}
-                </span>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        onClick={() => handleRespondControl(req.requestId, true)}
+                        className="flex-1 py-1 px-2 rounded bg-[#00AD03] hover:bg-[#008A02] text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <Check className="w-3 h-3" />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        onClick={() => handleRespondControl(req.requestId, false)}
+                        className="flex-1 py-1 px-2 rounded bg-[#EB0400] hover:bg-[#C90300] text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Deny</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            </div>
+          )}
 
-      {/* Quick Reactions Shelf */}
-      <div className="px-3 py-1.5 bg-[#18181B] border-t border-[#2F2F35] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
-        <span className="text-[10px] text-[#ADADB8] font-bold uppercase shrink-0 mr-1">
-          React:
-        </span>
-        {quickEmojis.map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => handleQuickReaction(emoji)}
-            className="px-1.5 py-0.5 rounded bg-[#1F1F23] hover:bg-[#26262C] hover:scale-110 active:scale-95 text-xs transition-all shrink-0"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
+          {/* Chat Messages Feed */}
+          <div className="flex-1 p-3 overflow-y-auto space-y-2 text-xs font-sans">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-4 text-[#ADADB8] space-y-1">
+                <span className="text-lg">💜</span>
+                <p className="text-xs font-semibold text-white">Welcome to the stream chat!</p>
+                <p className="text-[11px]">Chat with party members in sync and react with live emojis.</p>
+              </div>
+            ) : (
+              messages.map((m) => {
+                const userColor = getTwitchUserColor(m.username);
+                const timeStr = new Date(m.timestamp).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                });
 
-      {/* Bottom Input Area */}
-      <form onSubmit={handleSend} className="p-3 bg-[#18181B] border-t border-[#2F2F35] space-y-2 shrink-0">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Send a message"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            maxLength={500}
-            className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
-          />
-        </div>
+                return (
+                  <div key={m.id} className="leading-relaxed hover:bg-[#1F1F23]/60 -mx-2 px-2 py-0.5 rounded transition-colors break-words">
+                    {/* Time */}
+                    <span className="text-[#71717A] text-[10px] font-mono mr-1.5 select-none">
+                      {timeStr}
+                    </span>
 
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1 text-[#ADADB8]">
+                    {/* Role Badge (Crown / Sword) */}
+                    <span className="inline-flex items-center align-middle mr-1">
+                      {renderRoleBadge(m.role)}
+                    </span>
+
+                    {/* Username */}
+                    <span
+                      className="font-bold mr-1.5 hover:underline cursor-pointer"
+                      style={{ color: userColor }}
+                    >
+                      {m.username}:
+                    </span>
+
+                    {/* Message Body with Clickable Timestamps */}
+                    <span className="text-[#EFEFF1] text-xs selection:bg-[#9146FF]">
+                      {renderMessageWithTimestamps(m.text)}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Reactions Shelf */}
+          <div className="px-3 py-1.5 bg-[#18181B] border-t border-[#2F2F35] flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10px] text-[#ADADB8] font-bold uppercase shrink-0 mr-0.5">
+                React:
+              </span>
+              {quickEmojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => handleQuickReaction(emoji)}
+                  className="px-1.5 py-0.5 rounded bg-[#1F1F23] hover:bg-[#26262C] hover:scale-125 active:scale-95 text-xs transition-all shrink-0"
+                  title={`Send live reaction ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Drop Current Playback Timestamp Button */}
             <button
-              type="button"
-              onClick={() => setShowEmojis(!showEmojis)}
-              className="p-1 hover:text-white rounded hover:bg-[#1F1F23] transition-colors"
-              title="Emoji"
+              onClick={handleDropTimestamp}
+              className="px-2 py-0.5 rounded bg-[#1F1F23] hover:bg-[#9146FF]/30 text-[#BF94FF] text-[10px] font-mono font-bold flex items-center gap-1 border border-[#2F2F35] shrink-0 transition-colors"
+              title="Insert current video timestamp into chat"
             >
-              <Smile className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              className="p-1 hover:text-white rounded hover:bg-[#1F1F23] transition-colors"
-              title="Chat Settings"
-            >
-              <Settings className="w-4 h-4" />
+              <Clock className="w-3 h-3" />
+              <span>@{formatTime(currentPlaybackTime)}</span>
             </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={!inputText.trim()}
-            className="px-3 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] active:bg-[#5C16C5] disabled:opacity-40 disabled:hover:bg-[#9146FF] text-white rounded font-bold text-xs shadow-md transition-all flex items-center gap-1"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Chat</span>
-          </button>
-        </div>
-      </form>
+          {/* Bottom Input Area */}
+          <form onSubmit={handleSend} className="p-3 bg-[#18181B] border-t border-[#2F2F35] space-y-2 shrink-0">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Send a message (e.g. Look at @02:15)"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                maxLength={500}
+                className="w-full bg-[#1F1F23] hover:bg-[#26262C] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded px-3 py-2 text-xs text-white placeholder-[#71717A] outline-none transition-colors"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1 text-[#ADADB8]">
+                <button
+                  type="button"
+                  onClick={() => setShowEmojis(!showEmojis)}
+                  className="p-1 hover:text-white rounded hover:bg-[#1F1F23] transition-colors"
+                  title="Emoji"
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  className="p-1 hover:text-white rounded hover:bg-[#1F1F23] transition-colors"
+                  title="Chat Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!inputText.trim()}
+                className="px-3 py-1.5 bg-[#9146FF] hover:bg-[#772CE8] active:bg-[#5C16C5] disabled:opacity-40 disabled:hover:bg-[#9146FF] text-white rounded font-bold text-xs shadow-md transition-all flex items-center gap-1"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Chat</span>
+              </button>
+            </div>
+          </form>
+        </>
+      )}
     </aside>
   );
 };
+
+function formatTime(seconds: number): string {
+  if (isNaN(seconds) || seconds < 0) return '00:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function parseTimeToSeconds(timeStr: string): number {
+  const parts = timeStr.trim().split(':').map(Number);
+  if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
