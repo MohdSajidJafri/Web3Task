@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { WebSocketHandler } from './controllers/WebSocketHandler.js';
 import { roomManager } from './services/RoomManager.js';
+import { YouTubeService } from './services/YouTubeService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,31 @@ export function createServer() {
         playState: r.playState,
       }));
     res.json({ rooms: list });
+  });
+
+  // YouTube live search endpoint (with YouTube Data API v3 & direct fallback)
+  app.get('/api/youtube/search', async (req, res) => {
+    try {
+      const query = req.query.q || '';
+      const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+      const videos = await YouTubeService.search(query, apiKey);
+      res.json({ results: videos, count: videos.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to search YouTube videos', details: err.message });
+    }
+  });
+
+  // YouTube video details endpoint
+  app.get('/api/youtube/details/:videoId', async (req, res) => {
+    try {
+      const { videoId } = req.params;
+      const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+      const details = await YouTubeService.getVideoDetails(videoId, apiKey);
+      if (!details) return res.status(404).json({ error: 'Video not found' });
+      res.json(details);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch video details', details: err.message });
+    }
   });
 
   // Attach WebSocket handler

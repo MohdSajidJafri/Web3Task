@@ -404,6 +404,7 @@ export default function App() {
         onRequestControlOpen={() => setIsRequestModalOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onNotification={showNotification}
+        onStartPartyWithVideo={(videoId) => handleJoinOrCreate(username || 'Host', undefined, videoId)}
       />
 
       {/* 2. Main Content View */}

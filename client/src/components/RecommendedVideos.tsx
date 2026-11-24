@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Play,
   Plus,
@@ -15,9 +15,12 @@ import {
   Clock,
   Eye,
   ExternalLink,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { Role } from '../types';
 import { getSocket } from '../services/socket';
+import { searchYouTubeVideos, YouTubeSearchResult } from '../services/youtube';
 
 export interface RecommendedVideoItem {
   id: string;
@@ -185,6 +188,8 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [liveResults, setLiveResults] = useState<YouTubeSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [customUrl, setCustomUrl] = useState<string>('');
   const socket = getSocket();
 
@@ -197,17 +202,37 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
     { label: 'Tech', icon: <Cpu className="w-3.5 h-3.5" /> },
   ];
 
-  // Filter videos based on category and search query
+  // Debounced live YouTube search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setLiveResults([]);
+      setIsSearching(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await searchYouTubeVideos(searchQuery.trim());
+        setLiveResults(results);
+      } catch {
+        setLiveResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Filter curated videos if no search query
   const filteredVideos = useMemo(() => {
     return CURATED_RECOMMENDED_VIDEOS.filter((v) => {
       const matchesCategory = selectedCategory === 'All' || v.category === selectedCategory;
-      const matchesSearch =
-        searchQuery.trim() === '' ||
-        v.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.channel.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+      return matchesCategory;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory]);
+
+  const displayVideos = searchQuery.trim() ? liveResults : filteredVideos;
 
   // Actions
   const handlePlayNow = (videoId: string, title: string) => {
@@ -271,125 +296,173 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
         {/* Quick Search */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#ADADB8] absolute left-2.5 top-1/2 -translate-y-1/2" />
+            {isSearching ? (
+              <Loader2 className="w-3.5 h-3.5 text-[#9146FF] animate-spin absolute left-2.5 top-1/2 -translate-y-1/2" />
+            ) : (
+              <Search className="w-3.5 h-3.5 text-[#ADADB8] absolute left-2.5 top-1/2 -translate-y-1/2" />
+            )}
             <input
               type="text"
-              placeholder="Filter suggested videos..."
+              placeholder="Search YouTube in real time..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors w-48 sm:w-56"
+              className="bg-[#18181B] hover:bg-[#1F1F23] focus:bg-[#0E0E10] border border-[#2F2F35] focus:border-[#9146FF] rounded-md pl-8 pr-8 py-1.5 text-xs text-white placeholder-[#71717A] outline-none transition-colors w-52 sm:w-64"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#ADADB8] hover:text-white p-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* YouTube Filter Chips Strip */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 select-none">
-        {categories.map((cat) => {
-          const isActive = selectedCategory === cat.label;
-          return (
-            <button
-              key={cat.label}
-              onClick={() => setSelectedCategory(cat.label)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 active:scale-[0.98] ${
-                isActive
-                  ? 'bg-white text-black font-bold shadow-md shadow-white/10'
-                  : 'bg-[#1F1F23] hover:bg-[#26262C] text-[#EFEFF1] border border-[#2F2F35]'
-              }`}
-            >
-              {cat.icon}
-              <span>{cat.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Status Bar if Live Search is Active */}
+      {searchQuery.trim() && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-[#1F1F23] border border-[#2F2F35] rounded-md text-xs">
+          <div className="flex items-center gap-2 text-[#EFEFF1]">
+            <span className="w-2 h-2 rounded-full bg-[#00F593]" />
+            <span>
+              Live YouTube Results for <strong className="text-white">"{searchQuery}"</strong> ({displayVideos.length} found)
+            </span>
+          </div>
+          <button
+            onClick={() => setSearchQuery('')}
+            className="text-[11px] text-[#BF94FF] hover:underline"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
+
+      {/* YouTube Filter Chips Strip (when not searching) */}
+      {!searchQuery.trim() && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 select-none">
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat.label;
+            return (
+              <button
+                key={cat.label}
+                onClick={() => setSelectedCategory(cat.label)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 active:scale-[0.98] ${
+                  isActive
+                    ? 'bg-white text-black font-bold shadow-md shadow-white/10'
+                    : 'bg-[#1F1F23] hover:bg-[#26262C] text-[#EFEFF1] border border-[#2F2F35]'
+                }`}
+              >
+                {cat.icon}
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Suggested Videos Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filteredVideos.map((video) => {
-          const isCurrentlyPlaying = video.id === currentVideoId;
-          const thumbnailSrc = `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`;
+        {isSearching ? (
+          <div className="col-span-full p-12 flex flex-col items-center justify-center gap-2 text-xs text-[#ADADB8]">
+            <Loader2 className="w-7 h-7 text-[#9146FF] animate-spin" />
+            <span>Searching YouTube in real time...</span>
+          </div>
+        ) : displayVideos.length === 0 ? (
+          <div className="col-span-full p-12 text-center text-xs text-[#ADADB8] space-y-1 bg-[#18181B] border border-[#2F2F35] rounded-xl">
+            <p className="font-semibold text-white">No YouTube videos found for "{searchQuery}"</p>
+            <p>Try searching another keyword or paste a direct YouTube video URL.</p>
+          </div>
+        ) : (
+          displayVideos.map((video) => {
+            const isCurrentlyPlaying = video.id === currentVideoId;
+            const thumbnailSrc =
+              ('thumbnail' in video && video.thumbnail) ||
+              `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
+            const uploadedText =
+              'uploadedAt' in video && video.uploadedAt ? video.uploadedAt : 'YouTube';
 
-          return (
-            <div
-              key={video.id}
-              className={`group bg-[#18181B] hover:bg-[#1F1F23] border rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-md ${
-                isCurrentlyPlaying
-                  ? 'border-[#9146FF] ring-1 ring-[#9146FF] shadow-[#9146FF]/10'
-                  : 'border-[#2F2F35] hover:border-[#464649]'
-              }`}
-            >
-              {/* Thumbnail Stage with Badges & Hover Overlay */}
-              <div className="relative aspect-video w-full bg-black overflow-hidden">
-                <img
-                  src={thumbnailSrc}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                  onError={(e) => {
-                    // Fallback thumbnail if mqdefault fails
-                    (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
-                  }}
-                />
+            return (
+              <div
+                key={video.id}
+                className={`group bg-[#18181B] hover:bg-[#1F1F23] border rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-md ${
+                  isCurrentlyPlaying
+                    ? 'border-[#9146FF] ring-1 ring-[#9146FF] shadow-[#9146FF]/10'
+                    : 'border-[#2F2F35] hover:border-[#464649]'
+                }`}
+              >
+                {/* Thumbnail Stage with Badges & Hover Overlay */}
+                <div className="relative aspect-video w-full bg-black overflow-hidden">
+                  <img
+                    src={thumbnailSrc}
+                    alt={video.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
+                    }}
+                  />
 
-                {/* Duration Badge */}
-                <span
-                  className={`absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider shadow ${
-                    video.duration === 'LIVE'
-                      ? 'bg-[#EB0400] text-white flex items-center gap-1'
-                      : 'bg-black/85 text-white backdrop-blur-sm'
-                  }`}
-                >
-                  {video.duration === 'LIVE' && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-                  <span>{video.duration}</span>
-                </span>
+                  {/* Duration Badge */}
+                  {video.duration && (
+                    <span
+                      className={`absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider shadow ${
+                        video.duration === 'LIVE'
+                          ? 'bg-[#EB0400] text-white flex items-center gap-1'
+                          : 'bg-black/85 text-white backdrop-blur-sm'
+                      }`}
+                    >
+                      {video.duration === 'LIVE' && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                      <span>{video.duration}</span>
+                    </span>
+                  )}
 
-                {/* Now Playing Banner */}
-                {isCurrentlyPlaying && (
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#9146FF] text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00F593] animate-ping" />
-                    <span>NOW PLAYING</span>
-                  </div>
-                )}
+                  {/* Now Playing Banner */}
+                  {isCurrentlyPlaying && (
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#9146FF] text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00F593] animate-ping" />
+                      <span>NOW PLAYING</span>
+                    </div>
+                  )}
 
-                {/* Hover Quick Play Overlay */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => handlePlayNow(video.id, video.title)}
-                    className="p-2.5 rounded-full bg-[#9146FF] hover:bg-[#772CE8] text-white shadow-xl hover:scale-110 active:scale-95 transition-all"
-                    title={canControl ? 'Play Now' : 'Request Play'}
-                  >
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
-                  </button>
-                  <button
-                    onClick={() => handleAddToQueue(video.id, video.title)}
-                    className="p-2.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35] shadow-xl hover:scale-110 active:scale-95 transition-all"
-                    title={canControl ? 'Add to Queue' : 'Suggest to Host'}
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Video Details Card Body */}
-              <div className="p-3.5 flex flex-col justify-between flex-1 gap-2.5">
-                <div className="space-y-1">
-                  <h4
-                    className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-[#BF94FF] transition-colors"
-                    title={video.title}
-                  >
-                    {video.title}
-                  </h4>
-                  <div className="flex items-center gap-1 text-[11px] text-[#ADADB8]">
-                    <span className="font-semibold text-[#EFEFF1] truncate max-w-[140px]">{video.channel}</span>
-                    <CheckCircle2 className="w-3 h-3 text-[#ADADB8] shrink-0" />
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-[#71717A] font-mono tabular-nums">
-                    <span>{video.views}</span>
-                    <span>•</span>
-                    <span>{video.uploadedAt}</span>
+                  {/* Hover Quick Play Overlay */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => handlePlayNow(video.id, video.title)}
+                      className="p-2.5 rounded-full bg-[#9146FF] hover:bg-[#772CE8] text-white shadow-xl hover:scale-110 active:scale-95 transition-all"
+                      title={canControl ? 'Play Now' : 'Request Play'}
+                    >
+                      <Play className="w-5 h-5 fill-current ml-0.5" />
+                    </button>
+                    <button
+                      onClick={() => handleAddToQueue(video.id, video.title)}
+                      className="p-2.5 rounded-full bg-[#1F1F23] hover:bg-[#26262C] text-white border border-[#2F2F35] shadow-xl hover:scale-110 active:scale-95 transition-all"
+                      title={canControl ? 'Add to Queue' : 'Suggest to Host'}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
+
+                {/* Video Details Card Body */}
+                <div className="p-3.5 flex flex-col justify-between flex-1 gap-2.5">
+                  <div className="space-y-1">
+                    <h4
+                      className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-[#BF94FF] transition-colors"
+                      title={video.title}
+                    >
+                      {video.title}
+                    </h4>
+                    <div className="flex items-center gap-1 text-[11px] text-[#ADADB8]">
+                      <span className="font-semibold text-[#EFEFF1] truncate max-w-[140px]">{video.channel}</span>
+                      <CheckCircle2 className="w-3 h-3 text-[#ADADB8] shrink-0" />
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-[#71717A] font-mono tabular-nums">
+                      {video.views && <span>{video.views}</span>}
+                      {video.views && <span>•</span>}
+                      <span>{uploadedText}</span>
+                    </div>
+                  </div>
 
                 {/* Quick Action Footer Buttons */}
                 <div className="flex items-center gap-2 pt-2 border-t border-[#2F2F35]/60">
@@ -414,7 +487,7 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Direct YouTube Link Submission Bar */}
