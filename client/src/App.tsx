@@ -466,6 +466,7 @@ export default function App() {
         }}
         onSearchPageNavigate={navigateToSearch}
         onLogoClick={closeSearchPage}
+        onChannelClick={navigateToChannel}
       />
 
       {/* 2. Main Content View */}

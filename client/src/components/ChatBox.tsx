@@ -4,6 +4,11 @@ import { ChatMessage, ControlRequest, Role, QueueItem, SuggestedItem } from '../
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
 import { QueuePanel } from './QueuePanel';
+import {
+  PremiumEmoji,
+  CHAT_PICKER_EMOJIS,
+  renderTextWithPremiumEmojis,
+} from './PremiumEmoji';
 
 interface ChatBoxProps {
   roomId: string;
@@ -168,7 +173,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
 
     while ((match = timestampRegex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(text.substring(lastIndex, match.index));
+        parts.push(...renderTextWithPremiumEmojis(text.substring(lastIndex, match.index)));
       }
 
       const timeStr = match[1];
@@ -190,13 +195,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     }
 
     if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
+      parts.push(...renderTextWithPremiumEmojis(text.substring(lastIndex)));
     }
 
     return parts;
   };
 
-  const quickEmojis = ['🔥', '😂', '😱', '💜', '👏', 'GG', '🎉', '👀'];
+  const quickEmojis = ['🔥', '😂', '😱', '💜', '👏', '🤩', '🎉', '👀'];
 
   if (isCollapsed) {
     return (
@@ -399,10 +404,10 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
                 <button
                   key={emoji}
                   onClick={() => handleQuickReaction(emoji)}
-                  className="px-1.5 py-0.5 rounded bg-[#1F1F23] hover:bg-[#26262C] hover:scale-125 active:scale-95 text-xs transition-all shrink-0"
+                  className="p-1 rounded-[4px] bg-[#1F1F23] hover:bg-[#2F2F35] hover:scale-125 active:scale-95 transition-all shrink-0 flex items-center justify-center"
                   title={`Send live reaction ${emoji}`}
                 >
-                  {emoji}
+                  <PremiumEmoji emoji={emoji} size={18} />
                 </button>
               ))}
             </div>
@@ -419,7 +424,41 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
           </div>
 
           {/* Bottom Input Area */}
-          <form onSubmit={handleSend} className="p-3 bg-[#18181B] border-t border-[#2F2F35] space-y-2 shrink-0">
+          <form onSubmit={handleSend} className="p-3 bg-[#18181B] border-t border-[#2F2F35] space-y-2 shrink-0 relative">
+            {/* Premium Icons8 Emoji Picker Popover */}
+            {showEmojis && (
+              <div className="absolute bottom-full left-3 right-3 mb-2 p-2.5 bg-[#1F1F23] border border-[#3A3A42] rounded-[6px] shadow-2xl z-30">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#ADADB8]">
+                    Emojis
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojis(false)}
+                    className="text-[#ADADB8] hover:text-white p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {CHAT_PICKER_EMOJIS.map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => {
+                        setInputText((prev) => prev + em);
+                        setShowEmojis(false);
+                      }}
+                      className="p-1.5 rounded-[4px] hover:bg-[#2F2F35] flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+                      title={em}
+                    >
+                      <PremiumEmoji emoji={em} size={22} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="relative">
               <input
                 type="text"

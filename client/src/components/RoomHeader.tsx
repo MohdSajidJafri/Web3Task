@@ -24,6 +24,8 @@ import { Role } from '../types';
 import { getSocket } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
 import { searchYouTubeVideos, YouTubeSearchResult } from '../services/youtube';
+import { getSubscriptions, SubscribedChannel } from '../utils/library';
+import { ChannelTarget } from './ChannelPage';
 
 interface RoomHeaderProps {
   roomId?: string;
@@ -38,6 +40,7 @@ interface RoomHeaderProps {
   onStartPartyWithVideo?: (videoId: string, title?: string) => void;
   onSearchPageNavigate?: (query: string) => void;
   onLogoClick?: () => void;
+  onChannelClick?: (target: ChannelTarget) => void;
 }
 
 export const RoomHeader: React.FC<RoomHeaderProps> = ({
@@ -53,6 +56,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   onStartPartyWithVideo,
   onSearchPageNavigate,
   onLogoClick,
+  onChannelClick,
 }) => {
   const [copied, setCopied] = useState(false);
   const [videoInput, setVideoInput] = useState('');
@@ -60,18 +64,35 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true);
+  const [subscriptions, setSubscriptions] = useState<SubscribedChannel[]>(() => getSubscriptions());
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
   const socket = getSocket();
 
-  // Close search dropdown on click outside or Esc
+  // Sync subscriptions when library updates
+  useEffect(() => {
+    const syncSubs = () => setSubscriptions(getSubscriptions());
+    window.addEventListener('watchsync_library_updated', syncSubs);
+    return () => window.removeEventListener('watchsync_library_updated', syncSubs);
+  }, []);
+
+  // Close dropdowns on click outside or Esc
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setIsSearchOpen(false);
       }
+      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target as Node)) {
+        setIsNotifOpen(false);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsSearchOpen(false);
+      if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        setIsNotifOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -547,12 +568,109 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         </button>
 
         {/* Notifications */}
-        <button
-          className="p-1.5 rounded-[4px] hover:bg-[#2F2F35] text-[#EFEFF1] transition-colors hidden sm:flex items-center justify-center"
-          title="Notifications"
-        >
-          <Bell className="w-4 h-4" />
-        </button>
+        <div ref={notifContainerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setIsNotifOpen((prev) => !prev);
+              setHasUnreadNotifs(false);
+            }}
+            className={`p-1.5 rounded-[4px] transition-colors flex items-center justify-center relative cursor-pointer ${
+              isNotifOpen
+                ? 'bg-[#9146FF] text-white'
+                : 'hover:bg-[#2F2F35] text-[#EFEFF1]'
+            }`}
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            {hasUnreadNotifs && (
+              <span className="w-2 h-2 rounded-full bg-[#EB0400] absolute top-1 right-1 border border-[#18181B]" />
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div className="absolute right-0 top-[42px] w-80 max-w-[90vw] bg-[#18181B] border border-[#3A3A42] rounded-[6px] shadow-2xl shadow-black/80 z-50 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3.5 py-2.5 bg-[#1F1F23] border-b border-[#2F2F35] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-3.5 h-3.5 text-[#BF94FF]" />
+                  <span className="text-xs font-bold text-[#EFEFF1]">Notifications</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsNotifOpen(false)}
+                  className="p-1 hover:bg-[#2F2F35] rounded text-[#ADADB8] hover:text-white transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto divide-y divide-[#2F2F35]/60">
+                {inRoom && roomId && (
+                  <div className="p-3 flex items-start gap-2.5 bg-[#9146FF]/10">
+                    <span className="w-2 h-2 rounded-full bg-[#00F593] mt-1.5 shrink-0 animate-pulse" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-[#EFEFF1]">
+                        Live in WatchSync Room <span className="font-mono text-[#BF94FF]">{roomId}</span>
+                      </p>
+                      <p className="text-[11px] text-[#ADADB8]">
+                        Real-time playback sync & chat active ({userRole.toUpperCase()}).
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {subscriptions.length > 0 ? (
+                  subscriptions.slice(0, 6).map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setIsNotifOpen(false);
+                        onChannelClick?.({
+                          channelId: sub.id.startsWith('UC') ? sub.id : undefined,
+                          handle: sub.handle,
+                          name: sub.title,
+                        });
+                      }}
+                      className="w-full p-3 hover:bg-[#1F1F23] transition-colors flex items-center gap-2.5 text-left"
+                    >
+                      {sub.avatar ? (
+                        <img
+                          src={sub.avatar}
+                          alt={sub.title}
+                          className="w-8 h-8 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                          style={{ backgroundColor: getTwitchUserColor(sub.title) }}
+                        >
+                          {sub.title.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-[#EFEFF1] truncate">
+                          Subscribed to <span className="text-[#BF94FF]">{sub.title}</span>
+                        </p>
+                        <p className="text-[11px] text-[#ADADB8] truncate">
+                          Click to browse latest videos, shorts & live streams
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="p-4 text-center space-y-1">
+                    <p className="text-xs font-semibold text-[#EFEFF1]">All caught up!</p>
+                    <p className="text-[11px] text-[#ADADB8]">
+                      Subscribe to YouTube channels or join a WatchSync party to see updates here.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Keyboard Shortcuts Trigger Button */}
         {onOpenShortcuts && (

@@ -46,6 +46,7 @@ import {
   SavedVideoItem,
 } from '../utils/library';
 import { ChannelTarget } from './ChannelPage';
+import { PremiumEmoji } from './PremiumEmoji';
 
 interface PublicRoomInfo {
   roomId: string;
@@ -217,11 +218,11 @@ export const Lobby: React.FC<LobbyProps> = ({
 
   // Quick Preset Chips for Quick Start
   const presetChips = [
-    { label: '🎮 GTA VI Trailer', videoId: 'QdBZY2fkU-0', cat: 'gaming' },
-    { label: '🎵 Lofi Beats 24/7', videoId: '5qap5aO4i9A', cat: 'music' },
-    { label: '🌿 4K Nature Relax', videoId: 'LXb3EKWsInQ', cat: 'nature' },
-    { label: '🎬 Dune 2 Trailer', videoId: 'Way9Dexny3w', cat: 'trailers' },
-    { label: '💻 Web3 & AI Keynote', videoId: 'M7lc1UVf-VE', cat: 'tech' },
+    { emoji: '🎮', label: 'GTA VI Trailer', videoId: 'QdBZY2fkU-0', cat: 'gaming' },
+    { emoji: '🎵', label: 'Lofi Beats 24/7', videoId: '5qap5aO4i9A', cat: 'music' },
+    { emoji: '🌿', label: '4K Nature Relax', videoId: 'LXb3EKWsInQ', cat: 'nature' },
+    { emoji: '🎬', label: 'Dune 2 Trailer', videoId: 'Way9Dexny3w', cat: 'trailers' },
+    { emoji: '💻', label: 'Web3 & AI Keynote', videoId: 'M7lc1UVf-VE', cat: 'tech' },
   ];
 
   // Featured Hero Showcase Streams (Uses real Live YouTube Streams when loaded, HD maxresdefault.jpg)
@@ -806,13 +807,14 @@ export const Lobby: React.FC<LobbyProps> = ({
                               setSelectedPresetId(chip.videoId);
                               setCustomVideoUrl('');
                             }}
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                            className={`px-2.5 py-1 rounded-[4px] text-xs font-semibold transition-all flex items-center gap-1.5 ${
                               isSelected
                                 ? 'bg-[#9146FF] text-white shadow-md'
                                 : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#ADADB8] hover:text-[#EFEFF1]'
                             }`}
                           >
-                            {chip.label}
+                            <PremiumEmoji emoji={chip.emoji} size={15} />
+                            <span>{chip.label}</span>
                           </button>
                         );
                       })}

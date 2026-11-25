@@ -35,7 +35,8 @@ import {
   Clock,
   X,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Users
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
@@ -868,7 +869,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 </svg>
               </div>
               <div className="flex items-center gap-2 text-xs text-[#ADADB8]">
-                <span className="font-mono tabular-nums text-[#00F593]">👥 {viewerCount} in party</span>
+                <span className="font-mono tabular-nums text-[#00F593] inline-flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>{viewerCount} in party</span>
+                </span>
                 <span>•</span>
                 <span>2.48M followers</span>
               </div>
