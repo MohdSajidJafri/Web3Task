@@ -1060,8 +1060,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                           <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                           <span>LIVE</span>
                         </div>
-                        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums">
-                          👥 {room.viewers} in room
+                        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums inline-flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          <span>{room.viewers} in room</span>
                         </div>
                       </div>
                     </div>
@@ -1121,8 +1122,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                         <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                         <span>LIVE</span>
                       </div>
-                      <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums">
-                        👥 {p.viewers}
+                      <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums inline-flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        <span>{p.viewers}</span>
                       </div>
                       <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-mono">
                         {p.duration}

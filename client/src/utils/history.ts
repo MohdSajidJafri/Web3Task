@@ -58,7 +58,7 @@ export function addToWatchHistory(item: Omit<HistoryItem, 'watchedAt'>): History
     const updated: HistoryItem[] = [
       {
         ...item,
-        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`,
+        thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
         watchedAt: Date.now(),
       },
       ...current,

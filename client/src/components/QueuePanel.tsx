@@ -138,7 +138,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
 
                 <div className="w-16 h-10 bg-black rounded overflow-hidden shrink-0 relative">
                   <img
-                    src={`https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
+                    src={`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`}
                     alt={item.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {

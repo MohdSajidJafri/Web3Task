@@ -25,7 +25,8 @@
    - Hand-crafted Twitch design palette: `#0E0E10` (canvas), `#18181B` (cards/nav), `#1F1F23` (surfaces/inputs), `#2F2F35` (hover/borders), and `#9146FF` (signature Twitch purple).
    - **Twitch 3D Card Hover Interaction**: Hovering video thumbnails shifts them `translate(6px, -6px)` revealing an offset solid Twitch purple (`#9146FF`) backdrop underneath.
    - **Twitch Verified Rosette Badges**: Official 8-pointed star rosette SVG badge for verified channels and streamers.
-   - **Top 50px Navigation Bar**: Split search bar (`rounded-l-[6px]` input + attached `rounded-r-[6px]` search button), official Twitch Glitch logo SVG, Prime Loot crown, whispers, notifications, and 8px online status indicator.
+   - **Top 50px Navigation Bar**: Split search bar (`rounded-l-[6px]` input + attached `rounded-r-[6px]` search button), official Twitch Glitch logo SVG, **WatchSync** wordmark, interactive **Notifications** popover, Prime Loot crown, and 8px online status indicator.
+   - **Premium Apple/3D Emoji System (`PremiumEmoji.tsx`)**: High-resolution Icons8 3D emoji assets (`img.icons8.com/emoji/96/*.png`) across live floating reactions, stream chat quick-reactions, inline chat messages, an 18-emoji picker popover, and lobby preset chips.
    - **Hero Carousel Showcase Theater**: Dual-pane featured stream preview on the homepage with live stream preview and metadata card.
 
 3. **Object-Oriented Backend Architecture (OOP Bonus)**:
@@ -200,6 +201,7 @@ Web3Task_Assignment/
 │   │   │   ├── KeyboardShortcutsModal.tsx # Shortcuts quick-reference modal (?)
 │   │   │   ├── Lobby.tsx               # Authentic Twitch homepage, Live Hero & Trending
 │   │   │   ├── ParticipantsList.tsx    # Left rail roster with Twitch roles & actions
+│   │   │   ├── PremiumEmoji.tsx        # High-res Icons8 Apple/3D emoji renderer & picker
 │   │   │   ├── QueuePanel.tsx          # Shared video queue & suggestions tab
 │   │   │   ├── RecommendedVideos.tsx   # Live YouTube search & recommended videos shelf
 │   │   │   ├── RequestControlModal.tsx # Participant action request modal
