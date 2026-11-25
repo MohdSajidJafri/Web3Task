@@ -8,6 +8,7 @@ import { ParticipantsList } from './components/ParticipantsList';
 import { ChatBox } from './components/ChatBox';
 import { RequestControlModal } from './components/RequestControlModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { SearchResultsPage } from './components/SearchResultsPage';
 import { AlertCircle, CheckCircle, Info, X, Users, MessageSquare, PlaySquare } from 'lucide-react';
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'members'>('chat');
+  const [activeSearchQuery, setActiveSearchQuery] = useState<string | null>(null);
 
   // Bottom-right Toast Notifications
   const [notification, setNotification] = useState<{
@@ -56,14 +58,41 @@ export default function App() {
     }, 4000);
   }, []);
 
-  // Check URL query param ?room=CODE
+  // Check URL query param ?room=CODE and ?search_query=...
   const [initialRoomCode, setInitialRoomCode] = useState<string>('');
   useEffect(() => {
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('room');
+      if (code) {
+        setInitialRoomCode(code.toUpperCase());
+      }
+      const q = params.get('search_query');
+      setActiveSearchQuery(q ? q : null);
+    };
+
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    return () => window.removeEventListener('popstate', syncFromUrl);
+  }, []);
+
+  const navigateToSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setActiveSearchQuery(trimmed);
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('room');
-    if (code) {
-      setInitialRoomCode(code.toUpperCase());
-    }
+    params.set('search_query', trimmed);
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.pushState(null, '', newUrl);
+  }, []);
+
+  const closeSearchPage = useCallback(() => {
+    setActiveSearchQuery(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('search_query');
+    const qs = params.toString();
+    const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.pushState(null, '', newUrl);
   }, []);
 
   // 1. Session Reconnection check on load (sessionStorage)
@@ -400,15 +429,51 @@ export default function App() {
         username={username}
         inRoom={inRoom}
         canControl={canControl}
-        onLeaveRoom={handleLeaveRoom}
+        onLeaveRoom={() => {
+          setActiveSearchQuery(null);
+          handleLeaveRoom();
+        }}
         onRequestControlOpen={() => setIsRequestModalOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onNotification={showNotification}
-        onStartPartyWithVideo={(videoId) => handleJoinOrCreate(username || 'Host', undefined, videoId)}
+        onStartPartyWithVideo={(videoId) => {
+          setActiveSearchQuery(null);
+          handleJoinOrCreate(username || 'Host', undefined, videoId);
+        }}
+        onSearchPageNavigate={navigateToSearch}
+        onLogoClick={closeSearchPage}
       />
 
       {/* 2. Main Content View */}
-      {!inRoom ? (
+      {activeSearchQuery ? (
+        <SearchResultsPage
+          query={activeSearchQuery}
+          inRoom={inRoom}
+          canControl={canControl}
+          roomId={roomId}
+          onBack={closeSearchPage}
+          onStartPartyWithVideo={(videoId) => {
+            closeSearchPage();
+            handleJoinOrCreate(username || 'Host', undefined, videoId);
+          }}
+          onPlayVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('change_video', { roomId, videoId });
+            showNotification(`Playing: ${title || videoId}`, 'success');
+            closeSearchPage();
+          }}
+          onQueueVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_add', { roomId, videoId });
+            showNotification(`Added to Queue: ${title || videoId}`, 'success');
+          }}
+          onSuggestVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_suggest', { roomId, videoId });
+            showNotification(`Suggested to Host: ${title || videoId}`, 'info');
+          }}
+        />
+      ) : !inRoom ? (
         <Lobby onJoin={handleJoinOrCreate} initialRoomCode={initialRoomCode} />
       ) : (
         /* Theater Layout: Desktop 3-Column, Mobile Stacked with Tab Bar */

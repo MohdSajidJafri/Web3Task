@@ -52,13 +52,14 @@ export function createServer() {
     res.json({ rooms: list });
   });
 
-  // YouTube live search endpoint (with YouTube Data API v3 & direct fallback)
+  // YouTube live search endpoint (with YouTube Data API v3, direct fallback, & endless pagination)
   app.get('/api/youtube/search', async (req, res) => {
     try {
-      const query = req.query.q || '';
+      const query = String(req.query.q || '');
+      const pageToken = String(req.query.pageToken || '');
       const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
-      const videos = await YouTubeService.search(query, apiKey);
-      res.json({ results: videos, count: videos.length });
+      const { results, nextPageToken } = await YouTubeService.searchPaginated(query, apiKey, pageToken);
+      res.json({ results, count: results.length, nextPageToken });
     } catch (err) {
       res.status(500).json({ error: 'Failed to search YouTube videos', details: err.message });
     }

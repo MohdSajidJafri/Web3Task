@@ -36,6 +36,8 @@ interface RoomHeaderProps {
   onOpenShortcuts?: () => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
   onStartPartyWithVideo?: (videoId: string, title?: string) => void;
+  onSearchPageNavigate?: (query: string) => void;
+  onLogoClick?: () => void;
 }
 
 export const RoomHeader: React.FC<RoomHeaderProps> = ({
@@ -49,6 +51,8 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   onOpenShortcuts,
   onNotification,
   onStartPartyWithVideo,
+  onSearchPageNavigate,
+  onLogoClick,
 }) => {
   const [copied, setCopied] = useState(false);
   const [videoInput, setVideoInput] = useState('');
@@ -144,15 +148,25 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
       }
       setIsSearchOpen(false);
     } else {
-      // It's a search term, trigger YouTube search!
-      performSearch(trimmed);
+      // It's a search term: hitting Enter navigates to full YouTube Search Results page!
+      setIsSearchOpen(false);
+      if (onSearchPageNavigate) {
+        onSearchPageNavigate(trimmed);
+      } else {
+        performSearch(trimmed);
+      }
     }
   };
 
   const handleLobbySearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      performSearch(searchQuery);
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    setIsSearchOpen(false);
+    if (onSearchPageNavigate) {
+      onSearchPageNavigate(trimmed);
+    } else {
+      performSearch(trimmed);
     }
   };
 
@@ -223,7 +237,18 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
     <header className="h-[50px] bg-[#18181B] border-b border-[#2D2D35] px-3 sm:px-4 flex items-center justify-between gap-3 select-none z-40 shrink-0">
       {/* Left: Twitch Official Glitch Logo & Links */}
       <div className="flex items-center gap-4 shrink-0">
-        <a href="/" className="flex items-center gap-2 group cursor-pointer" title="Twitch Watch Party Home">
+        <a
+          href="/"
+          onClick={(e) => {
+            if (onLogoClick) {
+              e.preventDefault();
+              setIsSearchOpen(false);
+              onLogoClick();
+            }
+          }}
+          className="flex items-center gap-2 group cursor-pointer"
+          title="Twitch Watch Party Home"
+        >
           {/* Official Twitch Glitch Logo SVG */}
           <div className="w-8 h-8 rounded-[4px] bg-[#9146FF] group-hover:bg-[#772CE8] flex items-center justify-center transition-colors shadow-md shadow-[#9146FF]/30">
             <svg className="w-5 h-5 text-white fill-current" viewBox="0 0 24 24">
@@ -240,6 +265,13 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         <div className="hidden md:flex items-center gap-1">
           <a
             href="/"
+            onClick={(e) => {
+              if (onLogoClick) {
+                e.preventDefault();
+                setIsSearchOpen(false);
+                onLogoClick();
+              }
+            }}
             className="px-3 py-1.5 rounded-[4px] hover:bg-[#2F2F35] text-[#EFEFF1] hover:text-[#BF94FF] text-sm font-semibold transition-colors flex items-center gap-1.5"
           >
             <Compass className="w-4 h-4 text-[#BF94FF]" />
@@ -482,6 +514,22 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
                 ))
               )}
             </div>
+
+            {/* Footer: Navigate to Full Endless Search Results Page */}
+            {onSearchPageNavigate && (inRoom ? videoInput.trim() : searchQuery.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const q = (inRoom ? videoInput : searchQuery).trim();
+                  setIsSearchOpen(false);
+                  onSearchPageNavigate(q);
+                }}
+                className="w-full px-3.5 py-2.5 bg-[#1F1F23] hover:bg-[#2F2F35] border-t border-[#2F2F35] text-xs font-semibold text-[#BF94FF] hover:text-white flex items-center justify-between transition-colors"
+              >
+                <span>See all results for "{(inRoom ? videoInput : searchQuery).trim()}"</span>
+                <span className="text-[11px] font-mono">Enter →</span>
+              </button>
+            )}
           </div>
         )}
       </div>
