@@ -110,6 +110,13 @@ function parseVideoRenderer(vr) {
     vr.shortBylineText?.runs?.[0]?.text ||
     'YouTube Channel';
 
+  const channelEndpoint =
+    vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint ||
+    vr.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint;
+
+  const channelId = channelEndpoint?.browseId || '';
+  const channelUrl = channelEndpoint?.canonicalBaseUrl || '';
+
   const channelAvatar =
     vr.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails?.[0]?.url || '';
 
@@ -147,6 +154,8 @@ function parseVideoRenderer(vr) {
     id: videoId,
     title,
     channel,
+    channelId,
+    channelUrl,
     channelAvatar,
     verified,
     views,
@@ -155,6 +164,137 @@ function parseVideoRenderer(vr) {
     description,
     thumbnail,
   };
+}
+
+function parseLockupViewModel(lm, fallbackChannel = {}) {
+  const videoId = lm?.contentId;
+  if (!videoId || videoId.length !== 11) return null;
+
+  const meta = lm.metadata?.lockupMetadataViewModel;
+  const title = meta?.title?.content || 'YouTube Video';
+
+  const rows = meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
+  let views = '';
+  let publishedTime = '';
+
+  for (const row of rows) {
+    for (const part of row.metadataParts || []) {
+      const txt = part.text?.content || '';
+      if (!txt) continue;
+      if (txt.toLowerCase().includes('watching') || /^\d/.test(txt) && !txt.includes('ago')) {
+        if (!views) views = txt.includes('view') || txt.includes('watching') ? txt : `${txt} views`;
+      } else if (txt.includes('ago') || txt.toLowerCase().includes('streamed')) {
+        publishedTime = txt;
+      }
+    }
+  }
+
+  let duration = '';
+  const overlays = lm.contentImage?.thumbnailViewModel?.overlays || [];
+  for (const ov of overlays) {
+    const badges = ov.thumbnailBottomOverlayViewModel?.badges || [];
+    for (const b of badges) {
+      const badgeVm = b.thumbnailBadgeViewModel;
+      if (badgeVm?.text) {
+        duration = badgeVm.text;
+      }
+      if (badgeVm?.badgeStyle?.includes('LIVE')) {
+        duration = 'LIVE';
+      }
+    }
+  }
+
+  return {
+    id: videoId,
+    title,
+    channel: fallbackChannel.title || 'YouTube Channel',
+    channelId: fallbackChannel.id || '',
+    channelUrl: fallbackChannel.handle ? `/${fallbackChannel.handle}` : '',
+    channelAvatar: fallbackChannel.avatar || '',
+    verified: Boolean(fallbackChannel.verified),
+    views,
+    publishedTime,
+    duration,
+    description: '',
+    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+  };
+}
+
+function parseGridOrShortsItem(item, fallbackChannel = {}) {
+  const content = item?.richItemRenderer?.content || item;
+  if (content?.lockupViewModel) {
+    return parseLockupViewModel(content.lockupViewModel, fallbackChannel);
+  }
+  if (content?.videoRenderer) {
+    const parsed = parseVideoRenderer(content.videoRenderer);
+    if (parsed) {
+      if (!parsed.channel || parsed.channel === 'YouTube Channel') parsed.channel = fallbackChannel.title || parsed.channel;
+      if (!parsed.channelId) parsed.channelId = fallbackChannel.id || '';
+      if (!parsed.channelAvatar) parsed.channelAvatar = fallbackChannel.avatar || '';
+    }
+    return parsed;
+  }
+  if (content?.gridVideoRenderer) {
+    const gvr = content.gridVideoRenderer;
+    const videoId = gvr.videoId;
+    if (!videoId) return null;
+    const duration =
+      gvr.thumbnailOverlays?.find((o) => o.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText || '';
+    return {
+      id: videoId,
+      title: gvr.title?.runs?.[0]?.text || gvr.title?.simpleText || 'YouTube Video',
+      channel: fallbackChannel.title || 'YouTube Channel',
+      channelId: fallbackChannel.id || '',
+      channelUrl: fallbackChannel.handle ? `/${fallbackChannel.handle}` : '',
+      channelAvatar: fallbackChannel.avatar || '',
+      verified: Boolean(fallbackChannel.verified),
+      views: gvr.viewCountText?.simpleText || gvr.shortViewCountText?.simpleText || '',
+      publishedTime: gvr.publishedTimeText?.simpleText || '',
+      duration,
+      description: '',
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    };
+  }
+  if (content?.shortsLockupViewModel) {
+    const slm = content.shortsLockupViewModel;
+    const videoId = slm.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId || '';
+    if (!videoId) return null;
+    return {
+      id: videoId,
+      title: slm.overlayMetadata?.primaryText?.content || 'YouTube Short',
+      channel: fallbackChannel.title || 'YouTube Channel',
+      channelId: fallbackChannel.id || '',
+      channelUrl: fallbackChannel.handle ? `/${fallbackChannel.handle}` : '',
+      channelAvatar: fallbackChannel.avatar || '',
+      verified: Boolean(fallbackChannel.verified),
+      views: slm.overlayMetadata?.secondaryText?.content || '',
+      publishedTime: '',
+      duration: 'SHORTS',
+      description: '',
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    };
+  }
+  return null;
+}
+
+function encodeBrowseContinuation(innertubeKey, continuationToken) {
+  if (!innertubeKey || !continuationToken) return null;
+  const payload = JSON.stringify({ k: innertubeKey, c: continuationToken });
+  return 'yt_browse_' + Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+function decodeBrowseContinuation(pageToken) {
+  if (!pageToken || typeof pageToken !== 'string' || !pageToken.startsWith('yt_browse_')) {
+    return null;
+  }
+  try {
+    const raw = Buffer.from(pageToken.slice('yt_browse_'.length), 'base64url').toString('utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.k && parsed.c) return parsed;
+  } catch {
+    // Ignore
+  }
+  return null;
 }
 
 function encodeContinuation(innertubeKey, continuationToken) {
@@ -383,6 +523,266 @@ export class YouTubeService {
    */
   static async search(query, apiKey = process.env.YOUTUBE_API_KEY) {
     const { results } = await this.searchPaginated(query, apiKey);
+    return results;
+  }
+
+  /**
+   * Fetch YouTube channel metadata + paginated videos/streams/shorts.
+   * Works with channelId, @handle, or channel name (resolves via search).
+   */
+  static async getChannel({
+    channelId = '',
+    handle = '',
+    name = '',
+    tab = 'videos',
+    pageToken = '',
+    apiKey = process.env.YOUTUBE_API_KEY,
+  }) {
+    const validTab = ['videos', 'streams', 'shorts'].includes(tab) ? tab : 'videos';
+
+    // 1. Handle endless scroll continuation for channel grid
+    const browsePayload = decodeBrowseContinuation(pageToken);
+    if (browsePayload) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(
+          `https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(browsePayload.k)}`,
+          {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            body: JSON.stringify({
+              context: {
+                client: {
+                  clientName: 'WEB',
+                  clientVersion: '2.20231219.04.00',
+                },
+              },
+              continuation: browsePayload.c,
+            }),
+          }
+        );
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          const items =
+            data.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems ||
+            [];
+          const videos = [];
+          let nextToken = null;
+          for (const item of items) {
+            if (item.continuationItemRenderer) {
+              const nextC =
+                item.continuationItemRenderer.continuationEndpoint?.continuationCommand?.token;
+              if (nextC) nextToken = encodeBrowseContinuation(browsePayload.k, nextC);
+              continue;
+            }
+            const parsed = parseGridOrShortsItem(item, { title: name, id: channelId, handle });
+            if (parsed) videos.push(parsed);
+          }
+          return { channel: null, videos, nextPageToken: nextToken };
+        }
+      } catch {
+        return { channel: null, videos: [], nextPageToken: null };
+      }
+    }
+
+    // 2. Resolve target channel URL
+    let targetPath = '';
+    const cleanHandle = (handle || '').trim().replace(/^\/+/, '');
+    if (cleanHandle && (cleanHandle.startsWith('@') || cleanHandle.startsWith('c/') || cleanHandle.startsWith('user/'))) {
+      targetPath = `https://www.youtube.com/${cleanHandle}/${validTab}`;
+    } else if (channelId && channelId.startsWith('UC')) {
+      targetPath = `https://www.youtube.com/channel/${channelId}/${validTab}`;
+    } else if (name && name.trim()) {
+      // Resolve channel URL by searching YouTube for the channel name
+      try {
+        const searchRes = await this.searchPaginated(name.trim(), apiKey);
+        const matchWithChannel =
+          searchRes.results.find(
+            (r) =>
+              r.channel &&
+              r.channel.toLowerCase().includes(name.trim().toLowerCase()) &&
+              (r.channelUrl || r.channelId)
+          ) || searchRes.results.find((r) => r.channelUrl || r.channelId);
+
+        if (matchWithChannel?.channelUrl) {
+          const base = matchWithChannel.channelUrl.replace(/^\/+/, '');
+          targetPath = `https://www.youtube.com/${base}/${validTab}`;
+        } else if (matchWithChannel?.channelId) {
+          targetPath = `https://www.youtube.com/channel/${matchWithChannel.channelId}/${validTab}`;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    // 3. Scrape channel page ytInitialData (zero-key, works for all channels)
+    if (targetPath) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(targetPath, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const html = await res.text();
+          const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+          const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+          const innertubeKey = apiKeyMatch ? apiKeyMatch[1] : null;
+
+          if (match) {
+            const data = JSON.parse(match[1]);
+            const meta = data.metadata?.channelMetadataRenderer || {};
+            const ph = data.header?.pageHeaderRenderer?.content?.pageHeaderViewModel;
+            const c4 = data.header?.c4TabbedHeaderRenderer;
+
+            let resolvedHandle = cleanHandle;
+            let subscriberCount = '';
+            let videoCount = '';
+
+            const metaRows = ph?.metadata?.contentMetadataViewModel?.metadataRows || [];
+            for (const row of metaRows) {
+              for (const part of row.metadataParts || []) {
+                const txt = part.text?.content || '';
+                if (txt.startsWith('@')) resolvedHandle = txt;
+                else if (txt.toLowerCase().includes('subscriber')) subscriberCount = txt;
+                else if (txt.toLowerCase().includes('video')) videoCount = txt;
+              }
+            }
+
+            if (!subscriberCount && c4?.subscriberCountText?.simpleText) {
+              subscriberCount = c4.subscriberCountText.simpleText;
+            }
+
+            const avatarSources =
+              ph?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources ||
+              c4?.avatar?.thumbnails ||
+              meta.avatar?.thumbnails ||
+              [];
+            const avatar = avatarSources.slice(-1)[0]?.url || '';
+
+            const bannerSources =
+              ph?.banner?.imageBannerViewModel?.image?.sources ||
+              c4?.banner?.thumbnails ||
+              [];
+            const banner = bannerSources.slice(-1)[0]?.url || '';
+
+            const channelTitle =
+              ph?.title?.dynamicTextViewModel?.text?.content ||
+              c4?.title ||
+              meta.title ||
+              name ||
+              'YouTube Channel';
+
+            const description =
+              ph?.description?.descriptionPreviewViewModel?.description?.content ||
+              meta.description ||
+              '';
+
+            const resolvedId = meta.externalId || channelId || '';
+            const verified = Boolean(
+              ph?.title?.dynamicTextViewModel?.text?.attachmentRuns?.length ||
+                c4?.badges?.length
+            );
+
+            const channelInfo = {
+              id: resolvedId,
+              title: channelTitle,
+              handle: resolvedHandle || '',
+              avatar,
+              banner,
+              subscriberCount,
+              videoCount,
+              description,
+              verified,
+            };
+
+            const tabs = data.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+            const activeTabObj =
+              tabs.find((t) => t.tabRenderer?.selected) ||
+              tabs.find((t) => t.tabRenderer?.title?.toLowerCase() === validTab) ||
+              tabs[1] ||
+              tabs[0];
+
+            const gridContents =
+              activeTabObj?.tabRenderer?.content?.richGridRenderer?.contents ||
+              activeTabObj?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]
+                ?.itemSectionRenderer?.contents?.[0]?.gridRenderer?.items ||
+              [];
+
+            const videos = [];
+            let nextToken = null;
+
+            for (const item of gridContents) {
+              if (item.continuationItemRenderer && innertubeKey) {
+                const cTok =
+                  item.continuationItemRenderer.continuationEndpoint?.continuationCommand?.token;
+                if (cTok) nextToken = encodeBrowseContinuation(innertubeKey, cTok);
+                continue;
+              }
+              const parsed = parseGridOrShortsItem(item, channelInfo);
+              if (parsed) videos.push(parsed);
+            }
+
+            return {
+              channel: channelInfo,
+              videos,
+              nextPageToken: nextToken,
+            };
+          }
+        }
+      } catch {
+        // Fall through to search fallback
+      }
+    }
+
+    // 4. Fallback: search videos by channel name so channel page always shows relevant content
+    const fallbackSearch = await this.searchPaginated(name || handle || channelId || 'music', apiKey);
+    const first = fallbackSearch.results[0];
+    return {
+      channel: {
+        id: channelId || first?.channelId || '',
+        title: name || first?.channel || 'YouTube Channel',
+        handle: handle || '',
+        avatar: first?.channelAvatar || '',
+        banner: '',
+        subscriberCount: '',
+        videoCount: `${fallbackSearch.results.length}+ videos`,
+        description: `Watch videos from ${name || handle || 'this channel'} together in synchronized Watch Party mode.`,
+        verified: Boolean(first?.verified),
+      },
+      videos: fallbackSearch.results,
+      nextPageToken: fallbackSearch.nextPageToken,
+    };
+  }
+
+  /**
+   * Fetch YouTube Trending / Popular videos by category.
+   */
+  static async getTrending(category = 'all', apiKey = process.env.YOUTUBE_API_KEY) {
+    const queryMap = {
+      all: 'trending music gaming trailers 2026',
+      music: 'official music video trending 2026',
+      gaming: 'trending gaming trailers walkthrough 2026',
+      movies: 'official movie trailer 4k 2026',
+      tech: 'tech keynote AI showcase 2026',
+    };
+    const q = queryMap[category] || queryMap.all;
+    const { results } = await this.searchPaginated(q, apiKey);
     return results;
   }
 

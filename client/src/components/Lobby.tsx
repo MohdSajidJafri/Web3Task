@@ -23,11 +23,23 @@ import {
   Cpu,
   ArrowRight,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  ThumbsUp,
+  Bell,
+  Bookmark
 } from 'lucide-react';
 import { getWatchHistory, clearWatchHistory, formatTimeAgo, HistoryItem } from '../utils/history';
 import { getServerUrl } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
+import { getTrendingVideos, YouTubeSearchResult } from '../services/youtube';
+import {
+  getSubscriptions,
+  getWatchLater,
+  getLikedVideos,
+  SubscribedChannel,
+  SavedVideoItem,
+} from '../utils/library';
+import { ChannelTarget } from './ChannelPage';
 
 interface PublicRoomInfo {
   roomId: string;
@@ -40,9 +52,10 @@ interface PublicRoomInfo {
 interface LobbyProps {
   onJoin: (username: string, roomId?: string, initialVideoId?: string) => void;
   initialRoomCode?: string;
+  onChannelClick?: (target: ChannelTarget) => void;
 }
 
-export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
+export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannelClick }) => {
   const [username, setUsername] = useState(() => {
     return localStorage.getItem('watchsync_username') || '';
   });
@@ -57,11 +70,45 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [heroIndex, setHeroIndex] = useState(0);
+  const [trendingVideos, setTrendingVideos] = useState<YouTubeSearchResult[]>([]);
+  const [trendingCategory, setTrendingCategory] = useState<string>('all');
+  const [isLoadingTrending, setIsLoadingTrending] = useState<boolean>(false);
+  const [subscriptions, setSubscriptions] = useState<SubscribedChannel[]>(() => getSubscriptions());
+  const [watchLater, setWatchLater] = useState<SavedVideoItem[]>(() => getWatchLater());
+  const [likedVideos, setLikedVideos] = useState<SavedVideoItem[]>(() => getLikedVideos());
 
   const createSectionRef = useRef<HTMLDivElement>(null);
   const publicRoomsRef = useRef<HTMLDivElement>(null);
   const browseRef = useRef<HTMLDivElement>(null);
+  const trendingRef = useRef<HTMLDivElement>(null);
+  const libraryRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const syncLibrary = () => {
+      setSubscriptions(getSubscriptions());
+      setWatchLater(getWatchLater());
+      setLikedVideos(getLikedVideos());
+    };
+    window.addEventListener('watchsync_library_updated', syncLibrary);
+    return () => window.removeEventListener('watchsync_library_updated', syncLibrary);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTrending = async () => {
+      setIsLoadingTrending(true);
+      const list = await getTrendingVideos(trendingCategory);
+      if (!cancelled) {
+        setTrendingVideos(list.slice(0, 8));
+        setIsLoadingTrending(false);
+      }
+    };
+    loadTrending();
+    return () => {
+      cancelled = true;
+    };
+  }, [trendingCategory]);
 
   const handleClearHistory = () => {
     clearWatchHistory();
@@ -404,6 +451,83 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
               >
                 <Cpu className="w-4 h-4 text-[#FF69B4]" />
                 <span>Tech & Keynotes</span>
+              </button>
+            </div>
+          )}
+
+          {/* Section: YouTube Library & Trending */}
+          {!isSidebarCollapsed && (
+            <div className="px-2 pt-2 border-t border-[#2D2D35] space-y-1">
+              <span className="px-2 text-[11px] font-bold uppercase tracking-wider text-[#EFEFF1] block mb-1.5">
+                YOU & EXPLORE
+              </span>
+
+              <button
+                onClick={() => trendingRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
+              >
+                <Flame className="w-4 h-4 text-[#EB0400]" />
+                <span>Trending on YouTube</span>
+              </button>
+
+              <button
+                onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Bell className="w-4 h-4 text-[#BF94FF]" />
+                  <span>Subscriptions</span>
+                </span>
+                {subscriptions.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#2F2F35] text-[10px] font-mono text-[#EFEFF1]">
+                    {subscriptions.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Bookmark className="w-4 h-4 text-[#00E5FF]" />
+                  <span>Watch Later</span>
+                </span>
+                {watchLater.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#2F2F35] text-[10px] font-mono text-[#EFEFF1]">
+                    {watchLater.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
+              >
+                <span className="flex items-center gap-2.5">
+                  <ThumbsUp className="w-4 h-4 text-[#00F593]" />
+                  <span>Liked Videos</span>
+                </span>
+                {likedVideos.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#2F2F35] text-[10px] font-mono text-[#EFEFF1]">
+                    {likedVideos.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Clock className="w-4 h-4 text-[#ADADB8]" />
+                  <span>Watch History</span>
+                </span>
+                {watchHistory.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#2F2F35] text-[10px] font-mono text-[#EFEFF1]">
+                    {watchHistory.length}
+                  </span>
+                )}
               </button>
             </div>
           )}
@@ -924,7 +1048,264 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode }) => {
           </div>
         </section>
 
-        {/* 5. SHELF 3: Recently Watched & History */}
+        {/* 5. SHELF 3: Trending on YouTube (Live Feed) */}
+        <section ref={trendingRef} className="w-full max-w-6xl mx-auto space-y-3.5 pt-2 border-t border-[#2D2D35]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
+              <Flame className="w-4 h-4 text-[#EB0400]" />
+              <span>Trending on YouTube</span>
+              <span className="px-2 py-0.5 rounded-[2px] bg-[#EB0400]/20 text-[#FF6B6B] text-[10px] font-mono font-bold">
+                LIVE FEED
+              </span>
+            </h2>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'Now' },
+                { id: 'music', label: 'Music' },
+                { id: 'gaming', label: 'Gaming' },
+                { id: 'movies', label: 'Movies' },
+                { id: 'tech', label: 'Tech' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setTrendingCategory(cat.id)}
+                  className={`px-3 py-1 rounded-[4px] text-xs font-semibold transition-colors ${
+                    trendingCategory === cat.id
+                      ? 'bg-[#9146FF] text-white'
+                      : 'bg-[#1F1F23] hover:bg-[#2F2F35] text-[#ADADB8] hover:text-white'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoadingTrending ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2 animate-pulse">
+                  <div className="aspect-video w-full bg-[#18181B] rounded-[4px]" />
+                  <div className="h-4 bg-[#18181B] rounded w-5/6" />
+                  <div className="h-3 bg-[#18181B] rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {trendingVideos.map((v) => {
+                const avatarColor = getTwitchUserColor(v.channel || 'YouTube');
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => {
+                      const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+                      if (!username.trim()) {
+                        setUsername(chosenName);
+                        localStorage.setItem('watchsync_username', chosenName);
+                      }
+                      setIsSubmitting(true);
+                      onJoin(chosenName, undefined, v.id);
+                    }}
+                    className="group cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="twitch-card-container">
+                      <div className="twitch-card-backdrop" />
+                      <div className="twitch-card-thumb aspect-video w-full bg-black rounded-[4px] overflow-hidden relative shadow-md">
+                        <img
+                          src={v.thumbnail || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`}
+                          alt={v.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        {v.duration && (
+                          <span
+                            className={`absolute bottom-2 right-2 px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold font-mono shadow ${
+                              v.duration === 'LIVE' ? 'bg-[#EB0400] text-white' : 'bg-black/80 text-white'
+                            }`}
+                          >
+                            {v.duration}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex items-start gap-2.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChannelClick?.({
+                            channelId: v.channelId,
+                            handle: v.channelUrl,
+                            name: v.channel,
+                          });
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-sm hover:ring-2 hover:ring-[#9146FF]"
+                        style={{ backgroundColor: avatarColor }}
+                        title={`Visit ${v.channel} channel`}
+                      >
+                        {(v.channel || 'Y').charAt(0).toUpperCase()}
+                      </button>
+
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <h4
+                          className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF] transition-colors"
+                          title={v.title}
+                        >
+                          {v.title}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChannelClick?.({
+                              channelId: v.channelId,
+                              handle: v.channelUrl,
+                              name: v.channel,
+                            });
+                          }}
+                          className="text-[11px] text-[#ADADB8] hover:text-[#BF94FF] hover:underline truncate block text-left"
+                        >
+                          {v.channel}
+                        </button>
+                        {v.views && <p className="text-[10px] text-[#71717A]">{v.views}</p>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* 6. SHELF 4: Your YouTube Library (Subscriptions, Watch Later, Liked Videos) */}
+        {(subscriptions.length > 0 || watchLater.length > 0 || likedVideos.length > 0) && (
+          <section ref={libraryRef} className="w-full max-w-6xl mx-auto space-y-5 pt-2 border-t border-[#2D2D35]">
+            {subscriptions.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-[#BF94FF]" />
+                  <span>Your Subscriptions</span>
+                </h2>
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+                  {subscriptions.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() =>
+                        onChannelClick?.({
+                          channelId: sub.id.startsWith('UC') ? sub.id : undefined,
+                          handle: sub.handle,
+                          name: sub.title,
+                        })
+                      }
+                      className="flex items-center gap-2.5 px-3 py-2 bg-[#18181B] hover:bg-[#1F1F23] border border-[#2D2D35] hover:border-[#9146FF] rounded-[6px] shrink-0 transition-all text-left"
+                    >
+                      {sub.avatar ? (
+                        <img src={sub.avatar} alt={sub.title} className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                          style={{ backgroundColor: getTwitchUserColor(sub.title) }}
+                        >
+                          {sub.title.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-bold text-[#EFEFF1] hover:text-[#BF94FF]">{sub.title}</p>
+                        <p className="text-[10px] text-[#ADADB8]">
+                          {sub.subscriberCount || sub.handle || 'Subscribed'}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {watchLater.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 text-[#00E5FF]" />
+                  <span>Watch Later</span>
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {watchLater.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+                        onJoin(chosenName, undefined, item.id);
+                      }}
+                      className="group cursor-pointer bg-[#18181B] border border-[#2D2D35] hover:border-[#9146FF] rounded-[4px] p-2 flex items-center gap-3 transition-all hover:bg-[#1F1F23]"
+                    >
+                      <div className="relative aspect-video w-28 bg-black rounded-[2px] overflow-hidden shrink-0">
+                        <img
+                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Play className="w-4 h-4 text-white fill-current" />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF]">
+                          {item.title}
+                        </h4>
+                        <p className="text-[11px] text-[#ADADB8] truncate">{item.channel}</p>
+                        <span className="text-[10px] text-[#BF94FF] font-semibold block">Start Party →</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {likedVideos.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
+                  <ThumbsUp className="w-4 h-4 text-[#00F593]" />
+                  <span>Liked Videos</span>
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {likedVideos.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+                        onJoin(chosenName, undefined, item.id);
+                      }}
+                      className="group cursor-pointer bg-[#18181B] border border-[#2D2D35] hover:border-[#9146FF] rounded-[4px] p-2 flex items-center gap-3 transition-all hover:bg-[#1F1F23]"
+                    >
+                      <div className="relative aspect-video w-28 bg-black rounded-[2px] overflow-hidden shrink-0">
+                        <img
+                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Play className="w-4 h-4 text-white fill-current" />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF]">
+                          {item.title}
+                        </h4>
+                        <p className="text-[11px] text-[#ADADB8] truncate">{item.channel}</p>
+                        <span className="text-[10px] text-[#BF94FF] font-semibold block">Start Party →</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* 7. SHELF 5: Recently Watched & History */}
         <section ref={historyRef} className="w-full max-w-6xl mx-auto">
           {watchHistory.length > 0 && (
             <div className="space-y-3 pt-2 border-t border-[#2D2D35]">

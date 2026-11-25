@@ -65,6 +65,41 @@ export function createServer() {
     }
   });
 
+  // YouTube channel page endpoint (metadata + videos/streams/shorts + pagination)
+  app.get('/api/youtube/channel', async (req, res) => {
+    try {
+      const channelId = String(req.query.channelId || '');
+      const handle = String(req.query.handle || '');
+      const name = String(req.query.name || '');
+      const tab = String(req.query.tab || 'videos');
+      const pageToken = String(req.query.pageToken || '');
+      const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+      const data = await YouTubeService.getChannel({
+        channelId,
+        handle,
+        name,
+        tab,
+        pageToken,
+        apiKey,
+      });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load YouTube channel', details: err.message });
+    }
+  });
+
+  // YouTube trending / explore endpoint
+  app.get('/api/youtube/trending', async (req, res) => {
+    try {
+      const category = String(req.query.category || 'all');
+      const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+      const results = await YouTubeService.getTrending(category, apiKey);
+      res.json({ results, count: results.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load trending videos', details: err.message });
+    }
+  });
+
   // YouTube video details endpoint
   app.get('/api/youtube/details/:videoId', async (req, res) => {
     try {

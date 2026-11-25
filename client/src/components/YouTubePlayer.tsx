@@ -31,13 +31,26 @@ import {
   Gauge,
   Settings,
   Subtitles,
-  Repeat
+  Repeat,
+  Clock,
+  X,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { getTwitchUserColor } from '../utils/colors';
 import { FloatingReactions } from './FloatingReactions';
 import { RecommendedVideos } from './RecommendedVideos';
 import { PlayerSettingsMenu } from './PlayerSettingsMenu';
 import { addToWatchHistory } from '../utils/history';
+import {
+  isVideoLiked,
+  toggleLikedVideo,
+  isInWatchLater,
+  toggleWatchLater,
+  isChannelSubscribed,
+  toggleChannelSubscription,
+} from '../utils/library';
+import { ChannelTarget } from './ChannelPage';
 
 interface YouTubePlayerProps {
   roomId: string;
@@ -53,6 +66,7 @@ interface YouTubePlayerProps {
   onRequestControlOpen: () => void;
   onPlaybackTimeUpdate?: (time: number) => void;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
+  onChannelClick?: (target: ChannelTarget) => void;
 }
 
 declare global {
@@ -76,6 +90,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   onRequestControlOpen,
   onPlaybackTimeUpdate,
   onNotification,
+  onChannelClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -107,15 +122,34 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const socket = getSocket();
   const isHost = role === 'host';
 
+  const [isWatchLater, setIsWatchLater] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [shareStartAtTime, setShareStartAtTime] = useState<boolean>(false);
+
+  // Sync Liked & Watch Later & Subscription state when video/host changes
+  useEffect(() => {
+    if (currentVideoId) {
+      setIsLiked(isVideoLiked(currentVideoId));
+      setIsWatchLater(isInWatchLater(currentVideoId));
+    }
+    if (hostName) {
+      setIsSubscribed(isChannelSubscribed({ title: hostName }));
+    }
+  }, [currentVideoId, hostName]);
+
   const handleToggleLike = () => {
-    if (isLiked) {
-      setIsLiked(false);
-      setLikeCount((prev) => prev - 1);
-    } else {
-      setIsLiked(true);
-      setLikeCount((prev) => prev + 1);
-      if (isDisliked) setIsDisliked(false);
-      onNotification?.('Added to your Liked videos', 'success');
+    const vid = currentVideoId || syncState?.videoId;
+    if (vid) {
+      const liked = toggleLikedVideo({
+        id: vid,
+        title: syncState?.videoTitle || `YouTube Video (${vid})`,
+        channel: hostName || 'Host',
+        thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+      });
+      setIsLiked(liked);
+      setLikeCount((prev) => (liked ? prev + 1 : Math.max(0, prev - 1)));
+      if (liked && isDisliked) setIsDisliked(false);
+      onNotification?.(liked ? 'Added to your Liked videos' : 'Removed from Liked videos', liked ? 'success' : 'info');
     }
   };
 
@@ -126,17 +160,31 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       setIsDisliked(true);
       if (isLiked) {
         setIsLiked(false);
-        setLikeCount((prev) => prev - 1);
+        setLikeCount((prev) => Math.max(0, prev - 1));
       }
     }
   };
 
   const handleToggleSubscribe = () => {
-    setIsSubscribed((prev) => {
-      const next = !prev;
-      onNotification?.(next ? 'Subscribed to channel with notifications on! 🔔' : 'Unsubscribed from channel', 'info');
-      return next;
+    const next = toggleChannelSubscription({
+      id: hostName || 'Host',
+      title: hostName || 'Host',
     });
+    setIsSubscribed(next);
+    onNotification?.(next ? `Subscribed to ${hostName || 'channel'} with notifications on! 🔔` : 'Unsubscribed from channel', 'info');
+  };
+
+  const handleToggleWatchLater = () => {
+    const vid = currentVideoId || syncState?.videoId;
+    if (!vid) return;
+    const saved = toggleWatchLater({
+      id: vid,
+      title: syncState?.videoTitle || `YouTube Video (${vid})`,
+      channel: hostName || 'Host',
+      thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+    });
+    setIsWatchLater(saved);
+    onNotification?.(saved ? 'Saved to Watch Later' : 'Removed from Watch Later', saved ? 'success' : 'info');
   };
 
   const handleCycleSpeed = () => {
@@ -805,9 +853,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               </span>
             </div>
 
-            <div className="min-w-0">
+            <div
+              onClick={() => onChannelClick?.({ name: hostName || 'YouTube' })}
+              className="min-w-0 cursor-pointer group/host"
+              title={`Visit ${hostName || 'Host'} channel`}
+            >
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-sm text-[#EFEFF1] truncate max-w-[160px]">{hostName || 'Host'}</span>
+                <span className="font-bold text-sm text-[#EFEFF1] group-hover/host:text-[#BF94FF] group-hover/host:underline truncate max-w-[160px] transition-colors">
+                  {hostName || 'Host'}
+                </span>
                 <svg className="w-4 h-4 text-[#9146FF] fill-current shrink-0" viewBox="0 0 20 20" aria-label="Verified Streamer">
                   <title>Verified Streamer</title>
                   <path fillRule="evenodd" d="M10 1l2.5 1.5L15 2l1.5 2.5L19 5l-.5 3 2 2.5-2 2.5.5 3-2.5.5L15 18l-2.5-.5L10 19l-2.5-1.5L5 18l-1.5-2.5L1 15l.5-3L-.5 9.5l2-2.5-.5-3L3.5 4 5 1.5 7.5 2 10 1zm-1 12.5l5.5-5.5-1.5-1.5L9 10.5 7 8.5 5.5 10l3.5 3.5z" clipRule="evenodd" />
@@ -914,14 +968,93 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               </>
             )}
 
-            {/* Share Invite */}
+            {/* Watch Later / Save */}
             <button
-              onClick={copyShareInvite}
-              className="flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] bg-[#2F2F35] hover:bg-[#3A3A42] active:scale-[0.98] text-xs font-semibold text-[#EFEFF1] transition-all shadow-sm"
+              onClick={handleToggleWatchLater}
+              className={`flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] text-xs font-semibold transition-all active:scale-[0.98] ${
+                isWatchLater
+                  ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
+                  : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#EFEFF1]'
+              }`}
+              title="Save to Watch Later"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Share'}</span>
+              {isWatchLater ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Clock className="w-3.5 h-3.5" />}
+              <span>{isWatchLater ? 'Saved' : 'Save'}</span>
             </button>
+
+            {/* Share Invite & Timestamp */}
+            <div className="relative">
+              <button
+                onClick={() => setIsShareModalOpen(!isShareModalOpen)}
+                className="flex items-center gap-1.5 px-3 h-[30px] rounded-[4px] bg-[#2F2F35] hover:bg-[#3A3A42] active:scale-[0.98] text-xs font-semibold text-[#EFEFF1] transition-all shadow-sm"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-[#00F593]" /> : <Share2 className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Share'}</span>
+              </button>
+
+              {isShareModalOpen && (
+                <div className="absolute right-0 bottom-10 w-80 bg-[#18181B] border border-[#3A3A42] rounded-[6px] shadow-2xl p-3.5 z-50 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#2F2F35] pb-2">
+                    <span className="text-xs font-bold text-white">Share Watch Party / Video</span>
+                    <button
+                      onClick={() => setIsShareModalOpen(false)}
+                      className="text-[#ADADB8] hover:text-white p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        copyShareInvite();
+                        setIsShareModalOpen(false);
+                      }}
+                      className="w-full h-[32px] px-3 rounded-[4px] bg-[#9146FF] hover:bg-[#772CE8] text-white text-xs font-semibold flex items-center justify-between transition-colors"
+                    >
+                      <span>Copy Watch Party Invite Link</span>
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+
+                    {currentVideoId && (
+                      <div className="bg-[#1F1F23] border border-[#2F2F35] rounded-[4px] p-2.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-mono text-[#ADADB8] truncate">
+                            {`https://youtu.be/${currentVideoId}${
+                              shareStartAtTime ? `?t=${Math.floor(localCurrentTime)}` : ''
+                            }`}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const ytUrl = `https://youtu.be/${currentVideoId}${
+                                shareStartAtTime ? `?t=${Math.floor(localCurrentTime)}` : ''
+                              }`;
+                              navigator.clipboard.writeText(ytUrl);
+                              onNotification?.('YouTube link copied!', 'success');
+                              setIsShareModalOpen(false);
+                            }}
+                            className="px-2 py-1 rounded-[2px] bg-[#2F2F35] hover:bg-[#3A3A42] text-white text-[10px] font-semibold shrink-0 flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Copy</span>
+                          </button>
+                        </div>
+
+                        <label className="flex items-center gap-2 text-[11px] text-[#ADADB8] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={shareStartAtTime}
+                            onChange={(e) => setShareStartAtTime(e.target.checked)}
+                            className="accent-[#9146FF]"
+                          />
+                          <span>Start at {formatTime(localCurrentTime)}</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1005,6 +1138,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           currentUserRole={role}
           currentVideoId={currentVideoId}
           onNotification={onNotification}
+          onChannelClick={onChannelClick}
         />
       </div>
     </div>

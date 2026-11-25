@@ -9,6 +9,7 @@ import { ChatBox } from './components/ChatBox';
 import { RequestControlModal } from './components/RequestControlModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { SearchResultsPage } from './components/SearchResultsPage';
+import { ChannelPage, ChannelTarget } from './components/ChannelPage';
 import { AlertCircle, CheckCircle, Info, X, Users, MessageSquare, PlaySquare } from 'lucide-react';
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'members'>('chat');
   const [activeSearchQuery, setActiveSearchQuery] = useState<string | null>(null);
+  const [activeChannel, setActiveChannel] = useState<ChannelTarget | null>(null);
 
   // Bottom-right Toast Notifications
   const [notification, setNotification] = useState<{
@@ -79,6 +81,7 @@ export default function App() {
   const navigateToSearch = useCallback((query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
+    setActiveChannel(null);
     setActiveSearchQuery(trimmed);
     const params = new URLSearchParams(window.location.search);
     params.set('search_query', trimmed);
@@ -88,11 +91,20 @@ export default function App() {
 
   const closeSearchPage = useCallback(() => {
     setActiveSearchQuery(null);
+    setActiveChannel(null);
     const params = new URLSearchParams(window.location.search);
     params.delete('search_query');
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.pushState(null, '', newUrl);
+  }, []);
+
+  const navigateToChannel = useCallback((target: ChannelTarget) => {
+    setActiveChannel(target);
+  }, []);
+
+  const closeChannelPage = useCallback(() => {
+    setActiveChannel(null);
   }, []);
 
   // 1. Session Reconnection check on load (sessionStorage)
@@ -431,6 +443,7 @@ export default function App() {
         canControl={canControl}
         onLeaveRoom={() => {
           setActiveSearchQuery(null);
+          setActiveChannel(null);
           handleLeaveRoom();
         }}
         onRequestControlOpen={() => setIsRequestModalOpen(true)}
@@ -438,6 +451,7 @@ export default function App() {
         onNotification={showNotification}
         onStartPartyWithVideo={(videoId) => {
           setActiveSearchQuery(null);
+          setActiveChannel(null);
           handleJoinOrCreate(username || 'Host', undefined, videoId);
         }}
         onSearchPageNavigate={navigateToSearch}
@@ -445,13 +459,45 @@ export default function App() {
       />
 
       {/* 2. Main Content View */}
-      {activeSearchQuery ? (
+      {activeChannel ? (
+        <ChannelPage
+          target={activeChannel}
+          inRoom={inRoom}
+          canControl={canControl}
+          roomId={roomId}
+          onBack={closeChannelPage}
+          onNotification={showNotification}
+          onStartPartyWithVideo={(videoId) => {
+            setActiveChannel(null);
+            setActiveSearchQuery(null);
+            handleJoinOrCreate(username || 'Host', undefined, videoId);
+          }}
+          onPlayVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('change_video', { roomId, videoId });
+            showNotification(`Playing: ${title || videoId}`, 'success');
+            setActiveChannel(null);
+            setActiveSearchQuery(null);
+          }}
+          onQueueVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_add', { roomId, videoId });
+            showNotification(`Added to Queue: ${title || videoId}`, 'success');
+          }}
+          onSuggestVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_suggest', { roomId, videoId });
+            showNotification(`Suggested to Host: ${title || videoId}`, 'info');
+          }}
+        />
+      ) : activeSearchQuery ? (
         <SearchResultsPage
           query={activeSearchQuery}
           inRoom={inRoom}
           canControl={canControl}
           roomId={roomId}
           onBack={closeSearchPage}
+          onChannelClick={navigateToChannel}
           onStartPartyWithVideo={(videoId) => {
             closeSearchPage();
             handleJoinOrCreate(username || 'Host', undefined, videoId);
@@ -474,7 +520,11 @@ export default function App() {
           }}
         />
       ) : !inRoom ? (
-        <Lobby onJoin={handleJoinOrCreate} initialRoomCode={initialRoomCode} />
+        <Lobby
+          onJoin={handleJoinOrCreate}
+          initialRoomCode={initialRoomCode}
+          onChannelClick={navigateToChannel}
+        />
       ) : (
         /* Theater Layout: Desktop 3-Column, Mobile Stacked with Tab Bar */
         <div className="h-[calc(100vh-50px)] w-full flex flex-col lg:flex-row overflow-hidden">
@@ -507,6 +557,7 @@ export default function App() {
               onRequestControlOpen={() => setIsRequestModalOpen(true)}
               onPlaybackTimeUpdate={setCurrentPlaybackTime}
               onNotification={showNotification}
+              onChannelClick={navigateToChannel}
             />
 
             {/* Mobile / Tablet Tabbed Lower Area (visible only below lg breakpoint) */}

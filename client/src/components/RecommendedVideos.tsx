@@ -21,6 +21,7 @@ import {
 import { Role } from '../types';
 import { getSocket } from '../services/socket';
 import { searchYouTubeVideos, YouTubeSearchResult } from '../services/youtube';
+import { ChannelTarget } from './ChannelPage';
 
 export interface RecommendedVideoItem {
   id: string;
@@ -177,6 +178,7 @@ interface RecommendedVideosProps {
   currentUserRole: Role;
   currentVideoId?: string;
   onNotification?: (msg: string, type?: 'info' | 'error' | 'success') => void;
+  onChannelClick?: (target: ChannelTarget) => void;
 }
 
 export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
@@ -185,6 +187,7 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
   currentUserRole,
   currentVideoId,
   onNotification,
+  onChannelClick,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -453,10 +456,24 @@ export const RecommendedVideos: React.FC<RecommendedVideosProps> = ({
                     >
                       {video.title}
                     </h4>
-                    <div className="flex items-center gap-1 text-[11px] text-[#ADADB8]">
-                      <span className="font-semibold text-[#EFEFF1] truncate max-w-[140px]">{video.channel}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onChannelClick?.({
+                          channelId: 'channelId' in video ? video.channelId : undefined,
+                          handle: 'channelUrl' in video ? video.channelUrl : undefined,
+                          name: video.channel,
+                        });
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-[#ADADB8] hover:text-[#BF94FF] hover:underline text-left"
+                      title={`Visit ${video.channel} channel`}
+                    >
+                      <span className="font-semibold text-[#EFEFF1] hover:text-[#BF94FF] truncate max-w-[140px]">
+                        {video.channel}
+                      </span>
                       <CheckCircle2 className="w-3 h-3 text-[#ADADB8] shrink-0" />
-                    </div>
+                    </button>
                     <div className="flex items-center gap-2 text-[10px] text-[#71717A] font-mono tabular-nums">
                       {video.views && <span>{video.views}</span>}
                       {video.views && <span>•</span>}

@@ -11,9 +11,12 @@ import {
   Clock,
   Film,
   Sparkles,
+  Check,
 } from 'lucide-react';
 import { searchYouTubePaginated, YouTubeSearchResult } from '../services/youtube';
 import { getTwitchUserColor } from '../utils/colors';
+import { isInWatchLater, toggleWatchLater } from '../utils/library';
+import { ChannelTarget } from './ChannelPage';
 
 interface SearchResultsPageProps {
   query: string;
@@ -21,6 +24,7 @@ interface SearchResultsPageProps {
   canControl?: boolean;
   roomId?: string;
   onBack: () => void;
+  onChannelClick?: (target: ChannelTarget) => void;
   onStartPartyWithVideo?: (videoId: string, title?: string) => void;
   onPlayVideo?: (videoId: string, title?: string) => void;
   onQueueVideo?: (videoId: string, title?: string) => void;
@@ -44,6 +48,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   canControl = false,
   roomId,
   onBack,
+  onChannelClick,
   onStartPartyWithVideo,
   onPlayVideo,
   onQueueVideo,
@@ -54,6 +59,15 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<SearchFilter>('all');
+  const [watchLaterSet, setWatchLaterSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next = new Set<string>();
+    results.forEach((v) => {
+      if (isInWatchLater(v.id)) next.add(v.id);
+    });
+    setWatchLaterSet(next);
+  }, [results]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -360,38 +374,52 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
                         </div>
                       )}
 
-                      {/* Channel Row */}
+                      {/* Channel Row (Clickable -> Opens Channel Page) */}
                       <div className="flex items-center gap-2 py-1">
-                        {video.channelAvatar ? (
-                          <img
-                            src={video.channelAvatar}
-                            alt={video.channel}
-                            className="w-6 h-6 rounded-full object-cover shrink-0 bg-[#2F2F35]"
-                          />
-                        ) : (
-                          <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-                            style={{ backgroundColor: channelColor }}
-                          >
-                            {(video.channel || 'Y').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span className="text-xs font-medium text-[#ADADB8] group-hover:text-[#EFEFF1] truncate">
-                          {video.channel}
-                        </span>
-                        {video.verified && (
-                          <svg
-                            className="w-3.5 h-3.5 text-[#ADADB8] fill-current shrink-0"
-                            viewBox="0 0 20 20"
-                          >
-                            <title>Verified</title>
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clipRule="evenodd"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChannelClick?.({
+                              channelId: video.channelId,
+                              handle: video.channelUrl,
+                              name: video.channel,
+                            });
+                          }}
+                          className="flex items-center gap-2 group/ch hover:underline text-left"
+                          title={`Visit ${video.channel} channel`}
+                        >
+                          {video.channelAvatar ? (
+                            <img
+                              src={video.channelAvatar}
+                              alt={video.channel}
+                              className="w-6 h-6 rounded-full object-cover shrink-0 bg-[#2F2F35]"
                             />
-                          </svg>
-                        )}
+                          ) : (
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                              style={{ backgroundColor: channelColor }}
+                            >
+                              {(video.channel || 'Y').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-[#ADADB8] group-hover/ch:text-[#BF94FF] truncate">
+                            {video.channel}
+                          </span>
+                          {video.verified && (
+                            <svg
+                              className="w-3.5 h-3.5 text-[#ADADB8] fill-current shrink-0"
+                              viewBox="0 0 20 20"
+                            >
+                              <title>Verified</title>
+                              <path
+                                fillRule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          )}
+                        </button>
                       </div>
 
                       {/* Description Snippet */}
@@ -443,6 +471,40 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
                           <span>Start Watch Party</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => {
+                          const added = toggleWatchLater({
+                            id: video.id,
+                            title: video.title,
+                            channel: video.channel,
+                            channelId: video.channelId,
+                            channelUrl: video.channelUrl,
+                            duration: video.duration,
+                            views: video.views,
+                            thumbnail: video.thumbnail || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
+                          });
+                          setWatchLaterSet((prev) => {
+                            const next = new Set(prev);
+                            if (added) next.add(video.id);
+                            else next.delete(video.id);
+                            return next;
+                          });
+                        }}
+                        className={`h-[30px] px-3 rounded-[4px] text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-[0.98] ${
+                          watchLaterSet.has(video.id)
+                            ? 'bg-[#9146FF]/20 text-[#BF94FF] border border-[#9146FF]/40'
+                            : 'bg-[#2F2F35] hover:bg-[#3A3A42] text-[#EFEFF1]'
+                        }`}
+                        title="Save to Watch Later"
+                      >
+                        {watchLaterSet.has(video.id) ? (
+                          <Check className="w-3.5 h-3.5 text-[#00F593]" />
+                        ) : (
+                          <Clock className="w-3.5 h-3.5" />
+                        )}
+                        <span>{watchLaterSet.has(video.id) ? 'Saved' : 'Watch Later'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
