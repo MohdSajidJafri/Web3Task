@@ -787,6 +787,102 @@ export class YouTubeService {
   }
 
   /**
+   * Fetch videos that are ACTUALLY LIVE streaming on YouTube right now.
+   * Uses official API eventType=live when key is present, else YouTube's sp=EgJAAQ%253D%253D Live filter.
+   */
+  static async getLiveStreams(category = 'all', apiKey = process.env.YOUTUBE_API_KEY) {
+    const queryMap = {
+      all: 'live stream music gaming news',
+      music: 'lofi hip hop live radio stream',
+      gaming: 'gaming live stream gameplay',
+      news: 'live news world stream',
+      sports: 'live sports stream',
+    };
+    const q = queryMap[category] || queryMap.all;
+
+    // 1. Official YouTube Data API v3 with eventType=live
+    if (apiKey) {
+      try {
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&eventType=live&maxResults=16&q=${encodeURIComponent(q)}&key=${apiKey}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            return data.items
+              .filter((item) => item.id?.videoId)
+              .map((item) => ({
+                id: item.id.videoId,
+                title: item.snippet.title,
+                channel: item.snippet.channelTitle,
+                channelId: item.snippet.channelId || '',
+                channelUrl: item.snippet.channelId ? `/channel/${item.snippet.channelId}` : '',
+                channelAvatar: '',
+                verified: false,
+                views: 'LIVE NOW',
+                publishedTime: 'Streaming Live',
+                duration: 'LIVE',
+                description: item.snippet.description || '',
+                thumbnail: `https://i.ytimg.com/vi/${item.id.videoId}/maxresdefault.jpg`,
+              }));
+          }
+        }
+      } catch {
+        // Fall through to zero-key extractor
+      }
+    }
+
+    // 2. Zero-Key Direct YouTube Live Filter (sp=EgJAAQ%253D%253D)
+    try {
+      const liveUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgJAAQ%253D%253D`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(liveUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const html = await res.text();
+        const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+        if (match) {
+          const data = JSON.parse(match[1]);
+          const sections =
+            data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer
+              ?.contents || [];
+          const lives = [];
+          for (const section of sections) {
+            for (const item of section.itemSectionRenderer?.contents || []) {
+              if (item.videoRenderer) {
+                const parsed = parseVideoRenderer(item.videoRenderer);
+                if (parsed && parsed.duration === 'LIVE') {
+                  parsed.thumbnail = `https://i.ytimg.com/vi/${parsed.id}/maxresdefault.jpg`;
+                  lives.push(parsed);
+                }
+              }
+            }
+          }
+          if (lives.length > 0) {
+            return lives;
+          }
+        }
+      }
+    } catch {
+      // Fall through to live curated fallback
+    }
+
+    return CURATED_FALLBACK_VIDEOS.filter((v) => v.duration === 'LIVE');
+  }
+
+  /**
    * Get single video metadata.
    * @param {string} videoId
    * @param {string} [apiKey]

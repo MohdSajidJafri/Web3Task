@@ -165,3 +165,58 @@ export async function getTrendingVideos(category = 'all'): Promise<YouTubeSearch
   }
   return [];
 }
+
+/**
+ * Fetch videos that are currently live streaming on YouTube.
+ */
+export async function getLiveStreams(category = 'all'): Promise<YouTubeSearchResult[]> {
+  try {
+    const serverUrl = getServerUrl();
+    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY || '';
+    const qs = new URLSearchParams({ category });
+    if (apiKey) qs.set('key', apiKey);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${serverUrl}/api/youtube/live?${qs.toString()}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data.results) ? data.results : [];
+    }
+  } catch (err) {
+    console.warn('[YouTubeService] Live streams fetch failed:', err);
+  }
+  return [];
+}
+
+/**
+ * High-res YouTube thumbnail helper:
+ * Starts with maxresdefault.jpg (1280x720 HD 16:9, no letterbox bars).
+ * If YouTube serves the 120px placeholder or 404, gracefully downgrades to sddefault -> hqdefault -> fallback.
+ */
+export function handleYouTubeThumbLoad(img: HTMLImageElement, videoId?: string) {
+  if (!videoId || !img) return;
+  if (img.naturalWidth <= 120) {
+    if (img.src.includes('maxresdefault.jpg')) {
+      img.src = `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`;
+    } else if (img.src.includes('sddefault.jpg')) {
+      img.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    }
+  }
+}
+
+export function handleYouTubeThumbError(img: HTMLImageElement, videoId?: string) {
+  if (!img) return;
+  if (videoId && img.src.includes('maxresdefault.jpg')) {
+    img.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  } else if (videoId && img.src.includes('sddefault.jpg')) {
+    img.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  } else if (!img.src.includes('unsplash')) {
+    img.src =
+      'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80';
+  }
+}

@@ -100,6 +100,18 @@ export function createServer() {
     }
   });
 
+  // YouTube actual live streams endpoint
+  app.get('/api/youtube/live', async (req, res) => {
+    try {
+      const category = String(req.query.category || 'all');
+      const apiKey = req.query.key || req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+      const results = await YouTubeService.getLiveStreams(category, apiKey);
+      res.json({ results, count: results.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load live streams', details: err.message });
+    }
+  });
+
   // YouTube video details endpoint
   app.get('/api/youtube/details/:videoId', async (req, res) => {
     try {

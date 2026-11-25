@@ -31,7 +31,13 @@ import {
 import { getWatchHistory, clearWatchHistory, formatTimeAgo, HistoryItem } from '../utils/history';
 import { getServerUrl } from '../services/socket';
 import { getTwitchUserColor } from '../utils/colors';
-import { getTrendingVideos, YouTubeSearchResult } from '../services/youtube';
+import {
+  getTrendingVideos,
+  getLiveStreams,
+  handleYouTubeThumbLoad,
+  handleYouTubeThumbError,
+  YouTubeSearchResult,
+} from '../services/youtube';
 import {
   getSubscriptions,
   getWatchLater,
@@ -53,9 +59,15 @@ interface LobbyProps {
   onJoin: (username: string, roomId?: string, initialVideoId?: string) => void;
   initialRoomCode?: string;
   onChannelClick?: (target: ChannelTarget) => void;
+  onOpenHistory?: () => void;
 }
 
-export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannelClick }) => {
+export const Lobby: React.FC<LobbyProps> = ({
+  onJoin,
+  initialRoomCode,
+  onChannelClick,
+  onOpenHistory,
+}) => {
   const [username, setUsername] = useState(() => {
     return localStorage.getItem('watchsync_username') || '';
   });
@@ -71,6 +83,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [heroIndex, setHeroIndex] = useState(0);
   const [trendingVideos, setTrendingVideos] = useState<YouTubeSearchResult[]>([]);
+  const [liveStreams, setLiveStreams] = useState<YouTubeSearchResult[]>([]);
+  const [isLoadingLive, setIsLoadingLive] = useState<boolean>(true);
   const [trendingCategory, setTrendingCategory] = useState<string>('all');
   const [isLoadingTrending, setIsLoadingTrending] = useState<boolean>(false);
   const [subscriptions, setSubscriptions] = useState<SubscribedChannel[]>(() => getSubscriptions());
@@ -92,6 +106,22 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
     };
     window.addEventListener('watchsync_library_updated', syncLibrary);
     return () => window.removeEventListener('watchsync_library_updated', syncLibrary);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLive = async () => {
+      setIsLoadingLive(true);
+      const streams = await getLiveStreams('all');
+      if (!cancelled) {
+        setLiveStreams(streams);
+        setIsLoadingLive(false);
+      }
+    };
+    loadLive();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -194,66 +224,66 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
     { label: '💻 Web3 & AI Keynote', videoId: 'M7lc1UVf-VE', cat: 'tech' },
   ];
 
-  // Featured Hero Showcase Streams (Twitch Hero Carousel Style)
-  const heroStreams = [
+  // Featured Hero Showcase Streams (Uses real Live YouTube Streams when loaded, HD maxresdefault.jpg)
+  const fallbackHeroStreams = [
     {
       id: 'GTAVIP',
       videoId: 'QdBZY2fkU-0',
       title: 'Grand Theft Auto VI Trailer 1 Reveal — Synchronized Watch Party',
-      streamer: 'RockstarGames',
+      streamer: 'Rockstar Games',
+      channelId: '',
+      channelUrl: '@RockstarGames',
       category: 'Grand Theft Auto VI',
       viewers: '185,420',
       description: 'Welcome to Vice City. Experience the official synchronized watch party theater with ultra-low drift audio and live chat.',
       tags: ['English', 'GTA6', 'Trailer', '4K60fps', 'Multiplayer'],
-      thumbnail: 'https://i.ytimg.com/vi/QdBZY2fkU-0/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/QdBZY2fkU-0/maxresdefault.jpg',
       avatarColor: '#E91E63',
     },
     {
       id: 'LOFIPY',
       videoId: '5qap5aO4i9A',
       title: 'lofi hip hop radio - beats to relax/study to [24/7 Live Stream]',
-      streamer: 'LofiGirl',
+      streamer: 'Lofi Girl',
+      channelId: 'UCSJ4gkVC6NrvII8umztf0Ow',
+      channelUrl: '@LofiGirl',
       category: 'Music & Performing Arts',
       viewers: '78,910',
       description: 'Relax, study, or chill with the world’s favorite 24/7 lofi hip hop radio stream in synchronized party mode.',
       tags: ['Music', 'Lofi', 'Chill', 'Relaxing', 'Study'],
-      thumbnail: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/5qap5aO4i9A/maxresdefault.jpg',
       avatarColor: '#9C27B0',
-    },
-    {
-      id: 'CYBER9',
-      videoId: 'PbVKBoDuhZ0',
-      title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Teaser',
-      streamer: 'CyberpunkGame',
-      category: 'Cyberpunk 2077',
-      viewers: '15,200',
-      description: 'Return to Night City with Idris Elba. Watch the official teaser trailer with your friends in full HD.',
-      tags: ['Gaming', 'Cyberpunk', 'RPG', 'Action', 'Cinematic'],
-      thumbnail: 'https://i.ytimg.com/vi/PbVKBoDuhZ0/hqdefault.jpg',
-      avatarColor: '#00BCD4',
-    },
-    {
-      id: 'WEB3AI',
-      videoId: 'M7lc1UVf-VE',
-      title: 'YouTube Developers Live: Embedded Web Player Customization',
-      streamer: 'GoogleDevelopers',
-      category: 'Science & Technology',
-      viewers: '12,450',
-      description: 'Deep dive into the YouTube IFrame API, custom player architectures, and low-latency synchronization.',
-      tags: ['Tech', 'Coding', 'Web3', 'AI', 'JavaScript'],
-      thumbnail: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
-      avatarColor: '#4CAF50',
     },
   ];
 
-  const currentHero = heroStreams[heroIndex];
+  const heroStreams =
+    liveStreams.length > 0
+      ? liveStreams.slice(0, 5).map((ls) => ({
+          id: ls.id,
+          videoId: ls.id,
+          title: ls.title,
+          streamer: ls.channel,
+          channelId: ls.channelId || '',
+          channelUrl: ls.channelUrl || '',
+          category: 'YouTube Live Stream',
+          viewers: ls.views ? ls.views.replace(/watching/i, '').trim() : 'LIVE',
+          description:
+            ls.description ||
+            `Live streaming right now on YouTube by ${ls.channel}. Join or host a synchronized Watch Party.`,
+          tags: ['LIVE', 'YouTube Live', 'WatchParty', 'Sync'],
+          thumbnail: `https://i.ytimg.com/vi/${ls.id}/maxresdefault.jpg`,
+          avatarColor: getTwitchUserColor(ls.channel || ls.id),
+        }))
+      : fallbackHeroStreams;
 
-  // Recommended Channels for Left Sidebar
+  const currentHero = heroStreams[heroIndex % heroStreams.length];
+
+  // Recommended Channels for Left Sidebar (Clickable -> Redirects to Channel Page)
   const sidebarChannels = [
-    { name: 'RockstarGames', cat: 'Grand Theft Auto VI', viewers: '185K', color: '#E91E63', videoId: 'QdBZY2fkU-0' },
-    { name: 'LofiGirl', cat: 'Music & Lofi', viewers: '78.9K', color: '#9C27B0', videoId: '5qap5aO4i9A' },
-    { name: 'CyberpunkGame', cat: 'Cyberpunk 2077', viewers: '15.2K', color: '#00BCD4', videoId: 'PbVKBoDuhZ0' },
-    { name: 'GoogleDevs', cat: 'Science & Tech', viewers: '12.4K', color: '#4CAF50', videoId: 'M7lc1UVf-VE' },
+    { name: 'RockstarGames', channelName: 'Rockstar Games', handle: '@RockstarGames', cat: 'Grand Theft Auto VI', viewers: '185K', color: '#E91E63', videoId: 'QdBZY2fkU-0' },
+    { name: 'LofiGirl', channelName: 'Lofi Girl', handle: '@LofiGirl', cat: 'Music & Lofi', viewers: '78.9K', color: '#9C27B0', videoId: '5qap5aO4i9A' },
+    { name: 'CyberpunkGame', channelName: 'Cyberpunk 2077', handle: '@CyberpunkGame', cat: 'Cyberpunk 2077', viewers: '15.2K', color: '#00BCD4', videoId: 'PbVKBoDuhZ0' },
+    { name: 'GoogleDevs', channelName: 'Google for Developers', handle: '@GoogleDevelopers', cat: 'Science & Tech', viewers: '12.4K', color: '#4CAF50', videoId: 'M7lc1UVf-VE' },
   ];
 
   // Sample curated parties for the "Browse Active Parties" shelf
@@ -356,12 +386,14 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
               {sidebarChannels.map((c) => (
                 <div
                   key={c.name}
-                  onClick={() => {
-                    setSelectedPresetId(c.videoId);
-                    setCustomVideoUrl('');
-                  }}
+                  onClick={() =>
+                    onChannelClick?.({
+                      handle: c.handle,
+                      name: c.channelName,
+                    })
+                  }
                   className="px-2 py-1.5 flex items-center gap-2.5 hover:bg-[#26262C] cursor-pointer transition-colors group"
-                  title={isSidebarCollapsed ? `${c.name} • ${c.cat} (${c.viewers})` : undefined}
+                  title={isSidebarCollapsed ? `${c.channelName} • ${c.cat} (${c.viewers})` : `Visit ${c.channelName} channel`}
                 >
                   {/* Avatar */}
                   <div className="relative shrink-0">
@@ -486,7 +518,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
               </button>
 
               <button
-                onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => onOpenHistory?.()}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
               >
                 <span className="flex items-center gap-2.5">
@@ -501,7 +533,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
               </button>
 
               <button
-                onClick={() => libraryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => onOpenHistory?.()}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
               >
                 <span className="flex items-center gap-2.5">
@@ -516,12 +548,12 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
               </button>
 
               <button
-                onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => onOpenHistory?.()}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] text-xs font-semibold hover:bg-[#26262C] text-[#ADADB8] hover:text-white transition-colors"
               >
                 <span className="flex items-center gap-2.5">
-                  <Clock className="w-4 h-4 text-[#ADADB8]" />
-                  <span>Watch History</span>
+                  <Clock className="w-4 h-4 text-[#BF94FF]" />
+                  <span>History & Recently Watched</span>
                 </span>
                 {watchHistory.length > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-[#2F2F35] text-[10px] font-mono text-[#EFEFF1]">
@@ -557,15 +589,14 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
         {/* TOP HERO: Authentic Twitch Live Featured Carousel */}
         <section className="relative w-full max-w-6xl mx-auto">
           <div className="flex flex-col lg:flex-row bg-[#18181B] border border-[#2D2D35] rounded-[6px] overflow-hidden shadow-2xl">
-            {/* Left: 16:9 Video Theater Frame */}
+            {/* Left: 16:9 Video Theater Frame (Crisp HD maxresdefault.jpg) */}
             <div className="relative aspect-video lg:w-[65%] bg-black overflow-hidden group/theater">
               <img
                 src={currentHero.thumbnail}
                 alt={currentHero.title}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80';
-                }}
+                onLoad={(e) => handleYouTubeThumbLoad(e.currentTarget, currentHero.videoId)}
+                onError={(e) => handleYouTubeThumbError(e.currentTarget, currentHero.videoId)}
               />
               {/* Twitch LIVE Badge */}
               <div className="absolute top-3 left-3 px-2 py-0.5 rounded-[2px] bg-[#EB0400] text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
@@ -601,7 +632,17 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
             <div className="lg:w-[35%] p-5 flex flex-col justify-between space-y-4 bg-[#18181B]">
               <div className="space-y-3">
                 {/* Channel & Category Header */}
-                <div className="flex items-center gap-3">
+                <div
+                  onClick={() =>
+                    onChannelClick?.({
+                      channelId: currentHero.channelId || undefined,
+                      handle: currentHero.channelUrl || undefined,
+                      name: currentHero.streamer,
+                    })
+                  }
+                  className="flex items-center gap-3 cursor-pointer group/heroch"
+                  title={`Visit ${currentHero.streamer} channel`}
+                >
                   <div
                     className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 shadow-md ring-2 ring-[#9146FF]"
                     style={{ backgroundColor: currentHero.avatarColor }}
@@ -610,7 +651,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm text-[#EFEFF1] truncate hover:text-[#BF94FF] cursor-pointer">
+                      <span className="font-bold text-sm text-[#EFEFF1] truncate group-hover/heroch:text-[#BF94FF] group-hover/heroch:underline">
                         {currentHero.streamer}
                       </span>
                       {/* Twitch Official Verified Rosette SVG Badge */}
@@ -618,7 +659,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
                         <path fillRule="evenodd" d="M10 1l2.5 1.5L15 2l1.5 2.5L19 5l-.5 3 2 2.5-2 2.5.5 3-2.5.5L15 18l-2.5-.5L10 19l-2.5-1.5L5 18l-1.5-2.5L1 15l.5-3L-.5 9.5l2-2.5-.5-3L3.5 4 5 1.5 7.5 2 10 1zm-1 12.5l5.5-5.5-1.5-1.5L9 10.5 7 8.5 5.5 10l3.5 3.5z" clipRule="evenodd" />
                       </svg>
                     </div>
-                    <p className="text-xs text-[#BF94FF] hover:underline cursor-pointer truncate">
+                    <p className="text-xs text-[#BF94FF] truncate">
                       {currentHero.category}
                     </p>
                     <p className="text-[11px] text-[#ADADB8] font-mono tabular-nums">
@@ -874,96 +915,173 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
           </div>
         </section>
 
-        {/* 3. SHELF 1: Open Public Rooms (Twitch Card Grid) */}
+        {/* 3. SHELF 1: Live YouTube Watch Parties (Real Live Streams + Active Rooms) */}
         <section ref={publicRoomsRef} className="w-full max-w-6xl mx-auto space-y-3.5">
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
               <Globe className="w-4 h-4 text-[#00F593]" />
-              <span>Live watch parties we think you'll like</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#00F593]/20 text-[#00F593] border border-[#00F593]/40">
-                {publicRooms.length} Live Now
+              <span>Live watch parties — Streaming on YouTube Now</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#EB0400]/20 text-[#FF6B6B] border border-[#EB0400]/40">
+                {liveStreams.length > 0 ? `${liveStreams.length} Live Now` : `${publicRooms.length} Active`}
               </span>
             </h2>
-            <span className="text-xs text-[#ADADB8] hidden sm:inline">Synced with server in real time</span>
+            <span className="text-xs text-[#ADADB8] hidden sm:inline">Real-time YouTube Live Streams</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {publicRooms.map((room) => {
-              const thumbnailSrc = room.videoId
-                ? `https://i.ytimg.com/vi/${room.videoId}/hqdefault.jpg`
-                : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
-              const avatarColor = getTwitchUserColor(room.roomId);
-
-              return (
-                <div
-                  key={room.roomId}
-                  onClick={() => handleSelectSample(room.roomId)}
-                  className="group cursor-pointer flex flex-col justify-between"
-                >
-                  {/* Twitch Thumbnail with Signature Hover Translation */}
-                  <div className="twitch-card-container">
-                    <div className="twitch-card-backdrop" />
-                    <div className="twitch-card-thumb aspect-video w-full bg-black rounded-[4px] overflow-hidden relative shadow-md">
-                      <img
-                        src={thumbnailSrc}
-                        alt={room.videoTitle}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
-                        }}
-                      />
-                      {/* LIVE Badge */}
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-[#EB0400] text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                        <span>LIVE</span>
-                      </div>
-                      {/* Viewers */}
-                      <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums">
-                        👥 {room.viewers} in room
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Channel Details Under Thumbnail */}
-                  <div className="mt-2.5 flex items-start gap-2.5">
-                    {/* Avatar */}
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-sm"
-                      style={{ backgroundColor: avatarColor }}
-                    >
-                      {room.roomId.charAt(0)}
-                    </div>
-
-                    {/* Metadata */}
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <h4
-                        className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF] transition-colors leading-tight"
-                        title={room.videoTitle}
-                      >
-                        {room.videoTitle}
-                      </h4>
-                      <p className="text-[11px] text-[#ADADB8] flex items-center gap-1">
-                        <span>ROOM: {room.roomId}</span>
-                        <CheckCircle2 className="w-3 h-3 text-[#BF94FF] shrink-0" />
-                      </p>
-                      <p className="text-[11px] text-[#ADADB8]">
-                        Watch Party • YouTube Live
-                      </p>
-                      <div className="flex items-center gap-1 pt-1">
-                        <span className="px-2 py-0.5 rounded-full bg-[#29292E] text-[#ADADB8] text-[10px] font-semibold hover:bg-[#3A3A42]">
-                          English
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-[#29292E] text-[#ADADB8] text-[10px] font-semibold hover:bg-[#3A3A42]">
-                          Party
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+          {isLoadingLive ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2 animate-pulse">
+                  <div className="aspect-video w-full bg-[#18181B] rounded-[4px]" />
+                  <div className="h-4 bg-[#18181B] rounded w-5/6" />
+                  <div className="h-3 bg-[#18181B] rounded w-1/2" />
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : liveStreams.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {liveStreams.slice(0, 8).map((stream) => {
+                const avatarColor = getTwitchUserColor(stream.channel || stream.id);
+                return (
+                  <div
+                    key={stream.id}
+                    onClick={() => {
+                      const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
+                      if (!username.trim()) {
+                        setUsername(chosenName);
+                        localStorage.setItem('watchsync_username', chosenName);
+                      }
+                      setIsSubmitting(true);
+                      onJoin(chosenName, undefined, stream.id);
+                    }}
+                    className="group cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="twitch-card-container">
+                      <div className="twitch-card-backdrop" />
+                      <div className="twitch-card-thumb aspect-video w-full bg-black rounded-[4px] overflow-hidden relative shadow-md">
+                        <img
+                          src={`https://i.ytimg.com/vi/${stream.id}/maxresdefault.jpg`}
+                          alt={stream.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onLoad={(e) => handleYouTubeThumbLoad(e.currentTarget, stream.id)}
+                          onError={(e) => handleYouTubeThumbError(e.currentTarget, stream.id)}
+                        />
+                        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-[#EB0400] text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          <span>LIVE</span>
+                        </div>
+                        {stream.views && (
+                          <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums">
+                            {stream.views}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex items-start gap-2.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChannelClick?.({
+                            channelId: stream.channelId,
+                            handle: stream.channelUrl,
+                            name: stream.channel,
+                          });
+                        }}
+                        className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-sm hover:ring-2 hover:ring-[#9146FF]"
+                        style={{ backgroundColor: avatarColor }}
+                        title={`Visit ${stream.channel} channel`}
+                      >
+                        {(stream.channel || 'Y').charAt(0).toUpperCase()}
+                      </button>
+
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <h4
+                          className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF] transition-colors leading-tight"
+                          title={stream.title}
+                        >
+                          {stream.title}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChannelClick?.({
+                              channelId: stream.channelId,
+                              handle: stream.channelUrl,
+                              name: stream.channel,
+                            });
+                          }}
+                          className="text-[11px] text-[#ADADB8] hover:text-[#BF94FF] hover:underline flex items-center gap-1 text-left truncate"
+                        >
+                          <span className="truncate">{stream.channel}</span>
+                          {stream.verified && <CheckCircle2 className="w-3 h-3 text-[#BF94FF] shrink-0" />}
+                        </button>
+                        <div className="flex items-center gap-1 pt-1">
+                          <span className="px-2 py-0.5 rounded-full bg-[#29292E] text-[#ADADB8] text-[10px] font-semibold">
+                            YouTube Live
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#29292E] text-[#ADADB8] text-[10px] font-semibold">
+                            Watch Party
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {publicRooms.map((room) => {
+                const avatarColor = getTwitchUserColor(room.roomId);
+                return (
+                  <div
+                    key={room.roomId}
+                    onClick={() => handleSelectSample(room.roomId)}
+                    className="group cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="twitch-card-container">
+                      <div className="twitch-card-backdrop" />
+                      <div className="twitch-card-thumb aspect-video w-full bg-black rounded-[4px] overflow-hidden relative shadow-md">
+                        <img
+                          src={`https://i.ytimg.com/vi/${room.videoId}/maxresdefault.jpg`}
+                          alt={room.videoTitle}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onLoad={(e) => handleYouTubeThumbLoad(e.currentTarget, room.videoId)}
+                          onError={(e) => handleYouTubeThumbError(e.currentTarget, room.videoId)}
+                        />
+                        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-[#EB0400] text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          <span>LIVE</span>
+                        </div>
+                        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-[2px] bg-black/80 text-white text-[11px] font-medium font-mono tabular-nums">
+                          👥 {room.viewers} in room
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2.5 flex items-start gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-sm"
+                        style={{ backgroundColor: avatarColor }}
+                      >
+                        {room.roomId.charAt(0)}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <h4 className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF]">
+                          {room.videoTitle}
+                        </h4>
+                        <p className="text-[11px] text-[#ADADB8]">ROOM: {room.roomId}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* 4. SHELF 2: Browse Featured Parties */}
@@ -1224,147 +1342,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onJoin, initialRoomCode, onChannel
                 </div>
               </div>
             )}
-
-            {watchLater.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
-                  <Bookmark className="w-4 h-4 text-[#00E5FF]" />
-                  <span>Watch Later</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                  {watchLater.slice(0, 6).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
-                        onJoin(chosenName, undefined, item.id);
-                      }}
-                      className="group cursor-pointer bg-[#18181B] border border-[#2D2D35] hover:border-[#9146FF] rounded-[4px] p-2 flex items-center gap-3 transition-all hover:bg-[#1F1F23]"
-                    >
-                      <div className="relative aspect-video w-28 bg-black rounded-[2px] overflow-hidden shrink-0">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Play className="w-4 h-4 text-white fill-current" />
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF]">
-                          {item.title}
-                        </h4>
-                        <p className="text-[11px] text-[#ADADB8] truncate">{item.channel}</p>
-                        <span className="text-[10px] text-[#BF94FF] font-semibold block">Start Party →</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {likedVideos.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
-                  <ThumbsUp className="w-4 h-4 text-[#00F593]" />
-                  <span>Liked Videos</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                  {likedVideos.slice(0, 6).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        const chosenName = username.trim() || `Viewer${Math.floor(100 + Math.random() * 900)}`;
-                        onJoin(chosenName, undefined, item.id);
-                      }}
-                      className="group cursor-pointer bg-[#18181B] border border-[#2D2D35] hover:border-[#9146FF] rounded-[4px] p-2 flex items-center gap-3 transition-all hover:bg-[#1F1F23]"
-                    >
-                      <div className="relative aspect-video w-28 bg-black rounded-[2px] overflow-hidden shrink-0">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Play className="w-4 h-4 text-white fill-current" />
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF]">
-                          {item.title}
-                        </h4>
-                        <p className="text-[11px] text-[#ADADB8] truncate">{item.channel}</p>
-                        <span className="text-[10px] text-[#BF94FF] font-semibold block">Start Party →</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </section>
         )}
-
-        {/* 7. SHELF 5: Recently Watched & History */}
-        <section ref={historyRef} className="w-full max-w-6xl mx-auto">
-          {watchHistory.length > 0 && (
-            <div className="space-y-3 pt-2 border-t border-[#2D2D35]">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base sm:text-lg font-bold text-[#EFEFF1] tracking-tight flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-[#BF94FF]" />
-                  <span>Recently Watched & History</span>
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleClearHistory}
-                  className="text-xs text-[#ADADB8] hover:text-[#EB0400] flex items-center gap-1 transition-colors"
-                  title="Clear history"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear History</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {watchHistory.slice(0, 6).map((item) => (
-                  <div
-                    key={item.videoId}
-                    onClick={() => handleWatchFromHistory(item)}
-                    className="group cursor-pointer bg-[#18181B] border border-[#2D2D35] hover:border-[#9146FF] rounded-[4px] p-2 flex items-center gap-3 transition-all hover:bg-[#1F1F23]"
-                  >
-                    <div className="relative aspect-video w-28 bg-black rounded-[2px] overflow-hidden shrink-0">
-                      <img
-                        src={item.thumbnail || `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80';
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Play className="w-4 h-4 text-white fill-current" />
-                      </div>
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <h4
-                        className="text-xs font-semibold text-[#EFEFF1] line-clamp-1 group-hover:text-[#BF94FF] transition-colors"
-                        title={item.title}
-                      >
-                        {item.title}
-                      </h4>
-                      <p className="text-[11px] text-[#ADADB8] truncate">{item.channel || 'Watch Party'}</p>
-                      <div className="flex items-center justify-between text-[10px] text-[#ADADB8]">
-                        <span>{formatTimeAgo(item.watchedAt)}</span>
-                        <span className="text-[#BF94FF] font-semibold group-hover:underline">Start Party →</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
       </main>
     </div>
   );

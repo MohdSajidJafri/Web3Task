@@ -10,6 +10,7 @@ import { RequestControlModal } from './components/RequestControlModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { SearchResultsPage } from './components/SearchResultsPage';
 import { ChannelPage, ChannelTarget } from './components/ChannelPage';
+import { HistoryPage } from './components/HistoryPage';
 import { AlertCircle, CheckCircle, Info, X, Users, MessageSquare, PlaySquare } from 'lucide-react';
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<'chat' | 'members'>('chat');
   const [activeSearchQuery, setActiveSearchQuery] = useState<string | null>(null);
   const [activeChannel, setActiveChannel] = useState<ChannelTarget | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
   // Bottom-right Toast Notifications
   const [notification, setNotification] = useState<{
@@ -92,6 +94,7 @@ export default function App() {
   const closeSearchPage = useCallback(() => {
     setActiveSearchQuery(null);
     setActiveChannel(null);
+    setIsHistoryOpen(false);
     const params = new URLSearchParams(window.location.search);
     params.delete('search_query');
     const qs = params.toString();
@@ -100,11 +103,18 @@ export default function App() {
   }, []);
 
   const navigateToChannel = useCallback((target: ChannelTarget) => {
+    setIsHistoryOpen(false);
     setActiveChannel(target);
   }, []);
 
   const closeChannelPage = useCallback(() => {
     setActiveChannel(null);
+  }, []);
+
+  const openHistoryPage = useCallback(() => {
+    setActiveChannel(null);
+    setActiveSearchQuery(null);
+    setIsHistoryOpen(true);
   }, []);
 
   // 1. Session Reconnection check on load (sessionStorage)
@@ -519,11 +529,41 @@ export default function App() {
             showNotification(`Suggested to Host: ${title || videoId}`, 'info');
           }}
         />
+      ) : isHistoryOpen ? (
+        <HistoryPage
+          inRoom={inRoom}
+          canControl={canControl}
+          roomId={roomId}
+          onBack={() => setIsHistoryOpen(false)}
+          onChannelClick={navigateToChannel}
+          onNotification={showNotification}
+          onStartPartyWithVideo={(videoId) => {
+            setIsHistoryOpen(false);
+            handleJoinOrCreate(username || 'Host', undefined, videoId);
+          }}
+          onPlayVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('change_video', { roomId, videoId });
+            showNotification(`Playing: ${title || videoId}`, 'success');
+            setIsHistoryOpen(false);
+          }}
+          onQueueVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_add', { roomId, videoId });
+            showNotification(`Added to Queue: ${title || videoId}`, 'success');
+          }}
+          onSuggestVideo={(videoId, title) => {
+            if (!roomId) return;
+            getSocket().emit('queue_suggest', { roomId, videoId });
+            showNotification(`Suggested to Host: ${title || videoId}`, 'info');
+          }}
+        />
       ) : !inRoom ? (
         <Lobby
           onJoin={handleJoinOrCreate}
           initialRoomCode={initialRoomCode}
           onChannelClick={navigateToChannel}
+          onOpenHistory={openHistoryPage}
         />
       ) : (
         /* Theater Layout: Desktop 3-Column, Mobile Stacked with Tab Bar */

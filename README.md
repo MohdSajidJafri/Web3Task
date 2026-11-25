@@ -14,11 +14,12 @@
 
 ## 🚀 Key Highlights & Architectural Strengths
 
-1. **Dual-Strategy Live YouTube Search & API Integration**:
-   - Official **Google YouTube Data API v3** support via optional `YOUTUBE_API_KEY` / `VITE_YOUTUBE_API_KEY`.
-   - **Zero-Key Direct Search Fallback**: Automatically extracts live direct YouTube search results (titles, channels, durations, views, and `i.ytimg.com` thumbnails) without requiring an API key or Google Cloud account.
-   - **Twitch-Style Interactive Search Dropdown**: Real-time debounce search from the top navbar with 1-click **Play Now**, **+ Queue**, **Suggest to Host**, or **Start Watch Party**.
-   - **In-Theater Suggested & Recommended Videos**: Live search shelf under the theater player with category filters.
+1. **Full YouTube Experience (Search, Channels, Live Streams, Library)**:
+   - **YouTube-Style Endless Search Results Page**: Hitting **Enter** in the top search bar opens a dedicated search results page (`?search_query=...`) with infinite scroll (`IntersectionObserver` + `nextPageToken` / InnerTube continuation), duration/`LIVE` badges, filter chips, and 1-click party actions.
+   - **Clickable YouTube Channel Pages**: Clicking any channel name or avatar (in Search, Trending, Recommended Channels sidebar, or under the Video Player) opens that channel's full page with banner, avatar, subscriber count, **Videos / Live / Shorts / About** tabs, Latest/Popular sorting, and endless scroll.
+   - **Real Live YouTube Streams**: Both the Hero Carousel Theater and the Live Watch Parties shelf pull **currently live streaming videos** from YouTube (`/api/youtube/live`) with crisp HD `maxresdefault.jpg` banners.
+   - **Personal Library & Dedicated History Page**: **Subscriptions**, **Watch Later**, **Liked Videos**, and **Recently Watched & History** are persisted in `localStorage` and accessible from the left sidebar in a dedicated `HistoryPage` view without cluttering the Home page.
+   - **Dual-Strategy Zero-Key API**: Supports optional `YOUTUBE_API_KEY` (YouTube Data API v3) with an automatic zero-key direct extractor fallback.
 
 2. **Authentic Twitch Dark Theme Design System**:
    - Hand-crafted Twitch design palette: `#0E0E10` (canvas), `#18181B` (cards/nav), `#1F1F23` (surfaces/inputs), `#2F2F35` (hover/borders), and `#9146FF` (signature Twitch purple).
@@ -60,26 +61,30 @@ flowchart TD
     subgraph Client ["Frontend Client (React + TypeScript + Vite + Tailwind CSS)"]
         UI["Twitch-Themed UI"]
         UI --> Nav["50px Top Navbar & Split Search Bar"]
+        UI --> SearchPage["Endless Search Results Page"]
+        UI --> ChannelPage["YouTube Channel Pages (Videos/Live/Shorts)"]
+        UI --> HistoryPage["Dedicated History & Library Page"]
         UI --> Player["YouTube IFrame Player + Anti-Echo Sync"]
-        UI --> Hero["Hero Showcase Theater Carousel"]
+        UI --> Hero["HD Hero Live Carousel (maxresdefault.jpg)"]
         UI --> Queue["Shared Video Queue & Up Next"]
         UI --> Chat["Live Chat & Emoji Reactions"]
-        UI --> Rec["Suggested & Recommended Videos"]
         
         Nav --> SearchService["YouTube Client Service"]
+        SearchPage --> SearchService
+        ChannelPage --> SearchService
         Player --> SyncEngine["Drift & Anti-Echo Engine (1.2s threshold)"]
         SyncEngine --> SocketClient["Socket.IO Client (sessionStorage Reconnect)"]
     end
 
     subgraph Transport ["Full-Duplex Transport Layer"]
         WSS["WebSocket / Polling (Socket.IO v4)"]
-        HTTPS["REST API (/api/health, /api/rooms, /api/youtube/search)"]
+        HTTPS["REST API (/api/youtube/search, /channel, /live, /trending)"]
     end
 
     subgraph Server ["Backend Server (Node.js + Express + Socket.IO)"]
         WSHandler["WebSocketHandler (Controller & RBAC Gatekeeper)"]
         RoomMgr["RoomManager (In-Memory Room Registry & Demo Seeder)"]
-        YTService["YouTubeService (Dual-Strategy Search Engine)"]
+        YTService["YouTubeService (Search, Channel, Live, Trending)"]
         
         WSHandler --> RoomMgr
         RoomMgr --> RoomModel["Room (Authoritative Domain Entity)"]
@@ -97,7 +102,7 @@ flowchart TD
     end
 
     SocketClient <==>|"sync_state, play, pause, seek, queue_add"| WSS
-    SearchService <==>|"GET /api/youtube/search?q=..."| HTTPS
+    SearchService <==>|"GET /api/youtube/search, /channel, /live"| HTTPS
     WSS <==> WSHandler
     HTTPS <==> YTService
 
@@ -188,22 +193,26 @@ Web3Task_Assignment/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── ApprovalBanner.tsx      # Host/Mod 1-click Approval Bar
+│   │   │   ├── ChannelPage.tsx         # Full YouTube Channel view (Videos/Live/Shorts/About)
 │   │   │   ├── ChatBox.tsx             # Discord/Twitch style chat & emoji reactions
 │   │   │   ├── ControlsBar.tsx         # Scrubber, play/pause, seek, volume, resync
+│   │   │   ├── HistoryPage.tsx         # Dedicated History, Watch Later & Liked Videos page
 │   │   │   ├── KeyboardShortcutsModal.tsx # Shortcuts quick-reference modal (?)
-│   │   │   ├── Lobby.tsx               # Authentic Twitch homepage & Hero Theater
+│   │   │   ├── Lobby.tsx               # Authentic Twitch homepage, Live Hero & Trending
 │   │   │   ├── ParticipantsList.tsx    # Left rail roster with Twitch roles & actions
 │   │   │   ├── QueuePanel.tsx          # Shared video queue & suggestions tab
 │   │   │   ├── RecommendedVideos.tsx   # Live YouTube search & recommended videos shelf
 │   │   │   ├── RequestControlModal.tsx # Participant action request modal
 │   │   │   ├── RoomHeader.tsx          # 50px Twitch top navbar with YouTube search
+│   │   │   ├── SearchResultsPage.tsx   # YouTube-style endless search results page
 │   │   │   └── YouTubePlayer.tsx       # YouTube IFrame API + anti-echo + drift sync
 │   │   ├── services/
 │   │   │   ├── socket.ts               # Socket.IO connection manager & reconnect
-│   │   │   └── youtube.ts              # Client YouTube search service
+│   │   │   └── youtube.ts              # Client YouTube Search, Channel, Live & Trending API
 │   │   ├── utils/
 │   │   │   ├── colors.ts               # Authentic Twitch user color generator
-│   │   │   └── history.ts              # Local watch history persistence
+│   │   │   ├── history.ts              # Local watch history persistence
+│   │   │   └── library.ts              # Subscriptions, Watch Later & Liked Videos storage
 │   │   ├── types/index.ts              # TypeScript interfaces & types
 │   │   ├── App.tsx                     # Main layout & orchestrator
 │   │   ├── index.css                   # Twitch 3D card hover classes & dark scrollbars
