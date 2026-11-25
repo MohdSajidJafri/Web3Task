@@ -191,7 +191,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 : 'No liked videos yet'}
             </p>
             <p className="text-xs text-[#ADADB8]">
-              Videos you watch, save, or like in WatchParty will appear here.
+              Videos you watch, save, or like in WatchSync will appear here.
             </p>
           </div>
         ) : (

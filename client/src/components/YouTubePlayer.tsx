@@ -1068,7 +1068,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             <span>•</span>
             <span>Streamed live in Watch Party</span>
             <span>•</span>
-            <span className="text-[#9146FF]">#WatchParty</span>
+            <span className="text-[#9146FF]">#WatchSync</span>
             <span className="text-[#9146FF]">#YouTubeTheater</span>
             <span className="text-[#9146FF]">#SyncParty</span>
           </div>

@@ -1,5 +1,5 @@
 {
-  "name": "youtube-watch-party",
+  "name": "watchsync",
   "version": "1.0.0",
   "description": "Production-ready YouTube Watch Party System with real-time sync and strict RBAC",
   "main": "server/src/server.js",

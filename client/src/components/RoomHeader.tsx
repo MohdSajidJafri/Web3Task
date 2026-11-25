@@ -247,7 +247,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
             }
           }}
           className="flex items-center gap-2 group cursor-pointer"
-          title="Twitch Watch Party Home"
+          title="WatchSync Home"
         >
           {/* Official Twitch Glitch Logo SVG */}
           <div className="w-8 h-8 rounded-[4px] bg-[#9146FF] group-hover:bg-[#772CE8] flex items-center justify-center transition-colors shadow-md shadow-[#9146FF]/30">
@@ -257,7 +257,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
           </div>
           <div className="flex items-baseline font-black tracking-tight text-lg">
             <span className="text-white">Watch</span>
-            <span className="text-[#BF94FF]">Party</span>
+            <span className="text-[#BF94FF]">Sync</span>
           </div>
         </a>
 

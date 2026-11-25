@@ -466,7 +466,7 @@ export const ChannelPage: React.FC<ChannelPageProps> = ({
             <h2 className="text-base font-bold text-white">About {displayName}</h2>
             <p className="text-xs sm:text-sm text-[#ADADB8] whitespace-pre-line leading-relaxed">
               {channel?.description ||
-                `Official WatchParty channel view for ${displayName}. Select any video from the Videos, Live, or Shorts tabs to watch synchronized with friends.`}
+                `Official WatchSync channel view for ${displayName}. Select any video from the Videos, Live, or Shorts tabs to watch synchronized with friends.`}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[#2F2F35] text-xs">
               <div className="bg-[#1F1F23] p-3 rounded-[4px]">

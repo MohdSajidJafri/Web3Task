@@ -270,7 +270,7 @@ export const Lobby: React.FC<LobbyProps> = ({
           description:
             ls.description ||
             `Live streaming right now on YouTube by ${ls.channel}. Join or host a synchronized Watch Party.`,
-          tags: ['LIVE', 'YouTube Live', 'WatchParty', 'Sync'],
+          tags: ['LIVE', 'YouTube Live', 'WatchSync', 'Sync'],
           thumbnail: `https://i.ytimg.com/vi/${ls.id}/maxresdefault.jpg`,
           avatarColor: getTwitchUserColor(ls.channel || ls.id),
         }))
